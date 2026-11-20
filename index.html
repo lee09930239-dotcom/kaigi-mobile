@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f6feb">
+<title>会議字幕 モバイル</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--sub:#5b6470;--line:#dde1e6;--pri:#1f6feb;--ok:#1e8e3e;--ng:#c62828;--warn:#b26a00;--int:#8a94a0}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--card:#1b2026;--tx:#e8ebef;--sub:#9aa4ae;--line:#2c333b;--pri:#4c8dff;--ok:#3fb950;--ng:#ff6b6b;--warn:#e0a030;--int:#6f7a86}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.55 -apple-system,"Hiragino Sans","Noto Sans JP","Meiryo",sans-serif;padding:0 16px 40px;-webkit-text-size-adjust:100%}
+header{display:flex;align-items:center;gap:10px;padding:14px 0 6px}
+header h1{font-size:19px;margin:0;flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
+.hidden{display:none!important}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:10px;padding:11px 14px;min-height:46px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+button.primary{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:600}
+button.danger{color:var(--ng)}
+button:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(1)}
+button.copied{background:var(--ok)!important;border-color:var(--ok)!important;color:#fff!important}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1 1 auto}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;flex:1;min-height:44px}
+.seg button.on{background:var(--pri);color:#fff;font-weight:600}
+label{display:block;font-size:14px;color:var(--sub);margin:10px 0 4px}
+input,textarea,select{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+textarea{min-height:90px;resize:vertical}
+.big{font-size:20px;min-height:58px;width:100%}
+#caps{height:52vh;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:18px}
+.ln{padding:4px 0;border-bottom:1px dashed var(--line)}
+.ln small{color:var(--sub);font-size:12px;margin-right:6px}
+.int{color:var(--int)}
+.recbar{display:flex;align-items:center;gap:10px;margin:10px 0}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--ng);animation:bl 1s infinite}
+@keyframes bl{50%{opacity:.25}}
+.tm{font-variant-numeric:tabular-nums;font-weight:600}
+.note{font-size:14px;color:var(--sub)}
+.warn{font-size:14px;color:var(--warn);font-weight:600}
+.err{color:var(--ng);font-size:14px;font-weight:600}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.item:last-child{border-bottom:0}
+.item b{display:block}
+.step{display:inline-flex;width:24px;height:24px;border-radius:50%;background:var(--pri);color:#fff;font-size:13px;align-items:center;justify-content:center;margin-right:6px;font-weight:700}
+h2{font-size:16px;margin:0 0 8px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;max-width:90vw;z-index:9;opacity:0;transition:.2s;pointer-events:none}
+#toast.on{opacity:1}
+.tr{max-height:40vh;overflow-y:auto;font-size:15px}
+</style>
+</head>
+<body>
+<header><h1>🎙 会議字幕 モバイル</h1><button id="backBtn" class="hidden">← 一覧</button></header>
+
+<!-- ホーム -->
+<section id="home">
+  <div class="card">
+    <h2>認識する言語</h2>
+    <div class="seg" id="langSeg">
+      <button data-l="ja-JP" class="on">日本語</button><button data-l="zh-TW">中文</button><button data-l="en-US">English</button>
+    </div>
+    <p class="note">会議中でも切り替えできます。話している言語に合わせてください。</p>
+    <label for="mode">モード</label>
+    <select id="mode">
+      <option value="both">録音 ＋ 字幕(おすすめ)</option>
+      <option value="cap">字幕だけ</option>
+      <option value="rec">録音だけ</option>
+    </select>
+    <label for="newName">会議名(あとで変更できます)</label>
+    <input id="newName" placeholder="例:〇〇社 打ち合わせ">
+    <div style="margin-top:12px"><button id="startBtn" class="primary big">● 会議を始める</button></div>
+    <p class="err hidden" id="srErr"></p>
+    <p class="note">⚠ 会議中は画面を開いたままにしてください。画面を消したり別のアプリに切り替えると、録音・字幕が止まることがあります。インターネット接続が必要です。</p>
+  </div>
+  <div class="card">
+    <h2>これまでの会議</h2>
+    <div id="list"><p class="note">まだありません</p></div>
+    <p class="note">記録はこのスマホのこのブラウザの中だけに保存されます(他の人とは共有されません)。</p>
+  </div>
+</section>
+
+<!-- 会議中 -->
+<section id="live" class="hidden">
+  <div class="recbar"><span class="dot"></span><span class="tm" id="timer">00:00</span><span id="liveMode" class="note"></span></div>
+  <div class="seg" id="langSeg2">
+    <button data-l="ja-JP">日本語</button><button data-l="zh-TW">中文</button><button data-l="en-US">English</button>
+  </div>
+  <p class="warn hidden" id="liveWarn"></p>
+  <div id="caps" style="margin-top:10px"></div>
+  <label for="liveNotes">メモ(会議中に書けます)</label>
+  <textarea id="liveNotes" placeholder="大事な数字・決まったことなど"></textarea>
+  <div style="margin-top:12px"><button id="stopBtn" class="primary big" style="background:var(--ng);border-color:var(--ng)">■ 会議を終える</button></div>
+</section>
+
+<!-- 会議の記録 -->
+<section id="detail" class="hidden">
+  <div class="card">
+    <label for="dName" style="margin-top:0">会議名</label><input id="dName">
+    <p class="note" id="dInfo"></p>
+    <label for="dNotes">メモ(AI はメモの内容を優先します)</label><textarea id="dNotes"></textarea>
+  </div>
+  <div class="card">
+    <h2><span class="step">1</span>AI にまとめてもらう</h2>
+    <p class="warn hidden" id="noTx">⚠ 文字起こしがありません。録音ファイルをパソコン版に取り込んでください。</p>
+    <div class="row"><button id="copyBtn" class="primary">📋 AI 用にコピー</button></div>
+    <div class="row" style="margin-top:8px"><a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini を開く</a></div>
+    <p class="note">AI の入力欄を長押し → 「ペースト」→ 送信。</p>
+  </div>
+  <div class="card">
+    <h2><span class="step">2</span>AI の回答を貼り付け(保存されます)</h2>
+    <textarea id="dSummary" placeholder="=====摘要===== から始まる回答をそのまま貼り付け" style="min-height:140px"></textarea>
+    <div class="row" style="margin-top:8px"><button id="copySum">📋 議事録をコピー</button><button id="dlSum">⬇ 議事録 (.txt)</button></div>
+  </div>
+  <div class="card">
+    <h2><span class="step">3</span>パソコンに送る・保存する</h2>
+    <p class="note" id="audioInfo"></p>
+    <div class="row"><button id="shareAudio">📤 録音を送る</button><button id="dlAudio">⬇ 録音を保存</button></div>
+    <div class="row" style="margin-top:8px"><button id="dlTx">⬇ 文字起こし (.txt)</button></div>
+    <p class="note">「送る」で LINE・メール・Google ドライブなどに送れます。パソコン版の「録音を取り込む」で入れると、パソコンで認識し直して翻訳付きの議事録が作れます。</p>
+  </div>
+  <div class="card">
+    <h2>文字起こし</h2>
+    <div class="tr" id="dLines"></div>
+  </div>
+  <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
+</section>
+
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const LANGN={'ja-JP':'日本語','zh-TW':'中文','en-US':'English'};
+let lang=localStorage.getItem('lang')||'ja-JP';
+try{const m=localStorage.getItem('mode');if(m)$('#mode').value=m}catch(e){}
+
+// ---------- IndexedDB ----------
+let dbp=null;
+function db(){return dbp||(dbp=new Promise((ok,ng)=>{const r=indexedDB.open('kaigi-mobile',1);
+  r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('meetings',{keyPath:'id'});d.createObjectStore('chunks',{keyPath:['mid','seq']})};
+  r.onsuccess=()=>ok(r.result);r.onerror=()=>ng(r.error)}))}
+async function tx(store,mode,fn){const d=await db();return new Promise((ok,ng)=>{const t=d.transaction(store,mode);const s=t.objectStore(store);let res;const r=fn(s);if(r)r.onsuccess=()=>res=r.result;t.oncomplete=()=>ok(res);t.onerror=()=>ng(t.error)})}
+const put=(m)=>tx('meetings','readwrite',s=>s.put(m));
+const get=(id)=>tx('meetings','readonly',s=>s.get(id));
+const all=()=>tx('meetings','readonly',s=>s.getAll());
+const del=(id)=>tx('meetings','readwrite',s=>s.delete(id));
+async function chunksOf(mid){const d=await db();return new Promise(ok=>{const out=[];const t=d.transaction('chunks','readonly');
+  t.objectStore('chunks').openCursor(IDBKeyRange.bound([mid,0],[mid,1e9])).onsuccess=e=>{const c=e.target.result;if(c){out.push(c.value.blob);c.continue()}};t.oncomplete=()=>ok(out)})}
+const delChunks=(mid)=>tx('chunks','readwrite',s=>s.delete(IDBKeyRange.bound([mid,0],[mid,1e9])));
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+
+// ---------- 共通 ----------
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2600)}
+const pad=n=>String(n).padStart(2,'0');
+const hms=d=>`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+const dur=s=>{s=Math.round(s||0);const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?`${h}時間${m}分`:`${m}分${s%60}秒`};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();let ok=false;try{ok=document.execCommand('copy')}catch(_){}a.remove();return ok}}
+function flash(b,label){const o=b.dataset.o||(b.dataset.o=b.textContent);b.textContent=label;b.classList.add('copied');clearTimeout(b._t);b._t=setTimeout(()=>{b.textContent=o;b.classList.remove('copied')},3000)}
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
+const safe=s=>(s||'会議').replace(/[\\/:*?"<>|\r\n]+/g,'_').slice(0,40);
+const extOf=t=>/mp4|m4a|aac/.test(t)?'m4a':/ogg/.test(t)?'ogg':/wav/.test(t)?'wav':'webm';
+function show(id){for(const s of['home','live','detail'])$('#'+s).classList.toggle('hidden',s!==id);$('#backBtn').classList.toggle('hidden',id!=='detail');scrollTo(0,0)}
+function setLangUI(){document.querySelectorAll('#langSeg button,#langSeg2 button').forEach(b=>b.classList.toggle('on',b.dataset.l===lang))}
+setLangUI();
+document.querySelectorAll('#langSeg button,#langSeg2 button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;try{localStorage.setItem('lang',lang)}catch(e){}setLangUI();
+  if(cur){cur.langs.push({t:elapsed(),lang});if(rec){try{rec.stop()}catch(e){}}toast(LANGN[lang]+' に切り替えました')}});
+$('#mode').onchange=()=>{try{localStorage.setItem('mode',$('#mode').value)}catch(e){}};
+if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対応していません。Android は Chrome、iPhone は Safari で開いてください。録音だけは使えます。';$('#srErr').classList.remove('hidden')}
+
+// ---------- 一覧 ----------
+async function renderList(){const ms=(await all()).sort((a,b)=>b.id-a.id);const el=$('#list');
+  if(!ms.length){el.innerHTML='<p class="note">まだありません</p>';return}
+  el.innerHTML=ms.map(m=>`<div class="item" data-id="${m.id}"><div><b>${esc(m.name||'(名前なし)')}</b><span class="note">${new Date(m.start).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}・${dur(m.duration)}・${m.lines.length}行${m.summary?'・議事録あり':''}${m.status==='recording'?'・<span class="warn">途中で止まりました</span>':''}</span></div><span>›</span></div>`).join('');
+  el.querySelectorAll('.item').forEach(i=>i.onclick=()=>openDetail(+i.dataset.id))}
+
+// ---------- 録音・字幕 ----------
+let cur=null,rec=null,mr=null,stream=null,seq=0,tick=null,wake=null,interimEl=null,saveT=null;
+const elapsed=()=>cur?(Date.now()-cur.start)/1000:0;
+function saveSoon(){clearTimeout(saveT);saveT=setTimeout(()=>cur&&put(stripLive(cur)),800)}
+const stripLive=m=>({...m});
+async function keepAwake(){try{if('wakeLock' in navigator)wake=await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(cur&&document.visibilityState==='visible'){keepAwake();if(cur.useCap&&!rec)startSR()}
+  if(cur&&document.visibilityState==='hidden')warn('画面が切り替わりました。録音・字幕が止まっている可能性があります')});
+function warn(t){const w=$('#liveWarn');w.textContent='⚠ '+t;w.classList.remove('hidden')}
+function addLine(text){const now=new Date();const r={t:elapsed(),time:hms(now),lang,text:text.trim()};if(!r.text)return;cur.lines.push(r);
+  const d=document.createElement('div');d.className='ln';d.innerHTML=`<small>${r.time}</small>${esc(r.text)}`;$('#caps').insertBefore(d,interimEl);$('#caps').scrollTop=1e9;saveSoon()}
+function startSR(){if(!SR||!cur)return;const r=new SR();rec=r;r.lang=lang;r.continuous=true;r.interimResults=true;r.maxAlternatives=1;
+  r.onresult=e=>{let it='';for(let i=e.resultIndex;i<e.results.length;i++){const x=e.results[i];if(x.isFinal)addLine(x[0].transcript);else it+=x[0].transcript}
+    interimEl.textContent=it;$('#caps').scrollTop=1e9};
+  r.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){warn('字幕の許可がありません。ブラウザの設定でマイクと音声認識を許可してください');cur&&(cur.useCap=false)}
+    else if(e.error==='network')warn('インターネットに接続できないため字幕が止まっています。録音は続いています')
+    else if(e.error==='audio-capture')warn('字幕用にマイクが使えません。「字幕だけ」または「録音だけ」モードをお試しください')};
+  r.onend=()=>{if(rec===r)rec=null;interimEl&&(interimEl.textContent='');if(cur&&cur.useCap&&document.visibilityState==='visible')setTimeout(()=>{if(cur&&!rec)startSR()},250)};
+  try{r.start()}catch(e){rec=null}}
+async function startMeeting(){const mode=$('#mode').value;const useRec=mode!=='cap',useCap=mode!=='rec'&&!!SR;
+  if(!useRec&&!useCap){toast('このブラウザでは字幕が使えません。「録音」モードを選んでください');return}
+  const now=Date.now();cur={id:now,start:now,name:$('#newName').value.trim()||`${new Date(now).toLocaleDateString('ja-JP')} 会議`,notes:'',summary:'',lines:[],langs:[{t:0,lang}],mode,duration:0,status:'recording',audio:null,mime:'',useCap};
+  if(useRec){try{stream=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){toast('マイクを使えません:'+e.message);cur=null;return}
+    const mime=['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg'].find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
+    try{mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream)}catch(e){toast('この端末では録音できません:'+e.message);stream.getTracks().forEach(t=>t.stop());cur=null;return}
+    cur.mime=mr.mimeType||mime;seq=0;const mid=cur.id;
+    mr.ondataavailable=e=>{if(e.data&&e.data.size)tx('chunks','readwrite',s=>s.put({mid,seq:seq++,blob:e.data}))};
+    mr.start(5000)}
+  await put(stripLive(cur));
+  $('#caps').innerHTML='';interimEl=document.createElement('div');interimEl.className='ln int';$('#caps').appendChild(interimEl);
+  $('#liveNotes').value='';$('#liveWarn').classList.add('hidden');
+  $('#liveMode').textContent={both:'録音中・字幕あり',cap:'字幕のみ(録音なし)',rec:'録音のみ(字幕なし)'}[mode];
+  if(!useCap)interimEl.textContent='(字幕なしモード。録音は続いています)';
+  setLangUI();show('live');keepAwake();if(useCap)startSR();
+  tick=setInterval(()=>{const s=Math.floor(elapsed());$('#timer').textContent=(s>=3600?pad(Math.floor(s/3600))+':':'')+pad(Math.floor(s%3600/60))+':'+pad(s%60)},500)}
+$('#liveNotes').oninput=()=>{if(cur){cur.notes=$('#liveNotes').value;saveSoon()}};
+$('#startBtn').onclick=startMeeting;
+$('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);
+  if(rec){const r=rec;rec=null;try{r.stop()}catch(e){}}
+  if(interimEl&&interimEl.textContent.trim()&&m.mode!=='rec')addLine(interimEl.textContent);
+  if(mr&&mr.state!=='inactive'){await new Promise(ok=>{mr.addEventListener('stop',()=>setTimeout(ok,300),{once:true});mr.stop()})}
+  stream&&stream.getTracks().forEach(t=>t.stop());stream=null;mr=null;try{wake&&wake.release()}catch(e){}
+  m.duration=elapsed();m.notes=$('#liveNotes').value;cur=null;await finalize(m);openDetail(m.id)};
+async function finalize(m){const ch=await chunksOf(m.id);if(ch.length)m.audio=new Blob(ch,{type:(m.mime||'audio/webm').split(';')[0]});
+  if(!m.duration&&m.lines.length)m.duration=m.lines[m.lines.length-1].t;m.status='done';await put(m);await delChunks(m.id)}
+// 途中で閉じた会議を復旧
+(async()=>{for(const m of await all())if(m.status==='recording'&&(!cur||cur.id!==m.id)){await finalize(m)}renderList()})();
+
+// ---------- 会議の記録 ----------
+let doc=null;
+const PROMPT=`【議事録作成のお願い】
+あなたは会議の議事録を作るアシスタントです。このメッセージには「作り方の指示」と、「----」の行より後に「会議の情報・メモ・文字起こし」がすべて入っています。ほかのファイルを探したり質問を返したりせず、このメッセージだけを読んで、すぐに議事録を作ってください。
+
+以下は会議の文字起こし(スマホの音声自動認識のため誤字あり)と私のメモです。日本語で、下記の2つを、指定の区切り行も含めてそのまま出力してください。区切り行以外の前置きや説明は不要です。
+
+=====摘要=====
+- 会議全体を3〜5行で要約
+- 続けて「**各者の主張**」として、当方/先方ごとに主張・論点を箇条書き
+
+=====議事録=====
+次の構成で書くこと:
+
+**背景**
+- 会議に至った経緯・前提を2〜3点
+
+## 1. 結論
+- 合意した事項、決まった次のアクション(誰が何をするか)
+
+## 2. 情報共有
+- 時系列ではなくテーマごとに「**案件概要**」「**スケジュール(見込み)**」「**仕様・技術**」「**進め方**」「**検討中**」などの太字小見出しで分けて箇条書き(該当しない見出しは省略、必要なら追加)
+
+## 3. ToDo
+- 内容(期限) の形式。担当が当方以外なら先頭に担当者名
+
+書き方のルール:
+- です・ます調にしない。体言止めや「〜する」で簡潔に
+- 数値・規模・日付・型番は省略せず具体的に残す
+- 見込みや未確定の情報は「見込み」「未確定」「要確認」と明記
+- 認識誤りと思われる箇所は文脈から補正し、判断できない部分は「要確認」と書く
+- 文字起こしは「日本語」「中文」などの言語を手動で切り替えて認識しているため、別の言語の発言は意味の通らない文字になっていることがある。文脈から推測し、無理な場合は「要確認」とする
+- 話者は区別されていない。誰の発言かは内容(自社/御社などの言い方、質問と回答の流れ)から判断すること
+- 中国語・英語の発言も日本語でまとめる。社名・人名・型番は原語のまま残してよい
+- メモは私が書いたもので正確。メモの内容は必ず議事録に反映し、文字起こしと食い違う場合はメモを優先する
+`;
+function txLines(m){return m.lines.map(r=>`[${r.time}] (${LANGN[r.lang]||r.lang}) ${r.text}`).join('\n')}
+function promptOf(m){const d=new Date(m.start);return [PROMPT,'----',`会議名:${m.name}`,`日時:${d.toLocaleString('ja-JP')}(${dur(m.duration)})`,'',
+  '■ メモ',(m.notes||'').trim()||'(なし)','','■ 文字起こし',txLines(m)].join('\n')}
+async function openDetail(id){doc=await get(id);if(!doc)return;const m=doc;
+  $('#dName').value=m.name||'';$('#dNotes').value=m.notes||'';$('#dSummary').value=m.summary||'';
+  $('#dInfo').textContent=`${new Date(m.start).toLocaleString('ja-JP')}・${dur(m.duration)}・文字起こし ${m.lines.length} 行`;
+  const noTx=!m.lines.length;$('#noTx').classList.toggle('hidden',!noTx);$('#copyBtn').disabled=noTx;$('#dlTx').disabled=noTx;
+  const hasA=!!(m.audio&&m.audio.size);$('#shareAudio').disabled=!hasA;$('#dlAudio').disabled=!hasA;
+  $('#audioInfo').textContent=hasA?`録音ファイル:${(m.audio.size/1048576).toFixed(1)} MB(${extOf(m.audio.type)})`:'録音ファイルはありません(字幕だけモード)';
+  $('#dLines').innerHTML=m.lines.length?m.lines.map(r=>`<div class="ln"><small>${r.time}</small>${esc(r.text)}</div>`).join(''):'<p class="note">なし</p>';
+  show('detail')}
+let dT=null;
+function saveDoc(){clearTimeout(dT);dT=setTimeout(()=>doc&&put(doc),500)}
+$('#dName').oninput=()=>{doc.name=$('#dName').value;saveDoc()};
+$('#dNotes').oninput=()=>{doc.notes=$('#dNotes').value;saveDoc()};
+$('#dSummary').oninput=()=>{doc.summary=$('#dSummary').value;saveDoc()};
+$('#copyBtn').onclick=async()=>{if(await copyText(promptOf(doc))){flash($('#copyBtn'),'✓ コピーしました');toast('✓ コピーしました。AI の入力欄に貼り付けてください')}else toast('コピーできませんでした')};
+$('#copySum').onclick=async()=>{if(!doc.summary.trim())return toast('まだ議事録が貼り付けられていません');if(await copyText(doc.summary))flash($('#copySum'),'✓ コピーしました')};
+$('#dlSum').onclick=()=>{if(!doc.summary.trim())return toast('まだ議事録が貼り付けられていません');download(new Blob([doc.summary],{type:'text/plain'}),safe(doc.name)+'_議事録.txt')};
+$('#dlTx').onclick=()=>download(new Blob([`${doc.name}\n${new Date(doc.start).toLocaleString('ja-JP')}\n\n■ メモ\n${doc.notes||'(なし)'}\n\n■ 文字起こし\n${txLines(doc)}\n`],{type:'text/plain'}),safe(doc.name)+'_文字起こし.txt');
+function audioFile(){const e=extOf(doc.audio.type);return new File([doc.audio],safe(doc.name)+'.'+e,{type:doc.audio.type||'audio/webm'})}
+$('#dlAudio').onclick=()=>{const f=audioFile();download(f,f.name)};
+$('#shareAudio').onclick=async()=>{const f=audioFile();
+  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:doc.name})}catch(e){if(e.name!=='AbortError')toast('送れませんでした:'+e.message)}}
+  else{download(f,f.name);toast('このブラウザは「送る」に対応していないため、保存しました')}};
+$('#delBtn').onclick=async()=>{if(!confirm('この会議(文字起こし・録音・議事録)を削除しますか?元に戻せません'))return;await del(doc.id);doc=null;show('home');renderList()};
+$('#backBtn').onclick=async()=>{if(doc)await put(doc);doc=null;show('home');renderList()};
+window.addEventListener('beforeunload',e=>{if(cur){put(cur);e.preventDefault();e.returnValue=''}});
+</script>
+</body>
+</html>
