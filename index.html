@@ -51,6 +51,11 @@ h2{font-size:16px;margin:0 0 8px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;max-width:90vw;z-index:9;opacity:0;transition:.2s;pointer-events:none}
 #toast.on{opacity:1}
 .tr{max-height:40vh;overflow-y:auto;font-size:15px}
+.tr.editing{max-height:none}
+.eln{display:flex;gap:6px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--line)}
+.eln .f{flex:1}
+.eln textarea{min-height:0;padding:6px;font-size:15px}
+.eln .del{min-height:36px;padding:4px 8px}
 </style>
 </head>
 <body>
@@ -139,11 +144,13 @@ h2{font-size:16px;margin:0 0 8px}
     <h2><span class="step">3</span>パソコンに送る・保存する</h2>
     <p class="note" id="audioInfo"></p>
     <div class="row"><button id="shareAudio">📤 録音を送る</button><button id="dlAudio">⬇ 録音を保存</button></div>
+    <div class="row" style="margin-top:8px"><button id="dlAll">⬇ まとめて書き出す (.txt)</button></div>
     <div class="row" style="margin-top:8px"><button id="dlTx">⬇ 文字起こし (.txt)</button></div>
     <p class="note">「送る」で LINE・メール・Google ドライブなどに送れます。パソコン版の「録音を取り込む」で入れると、パソコンで認識し直して翻訳付きの議事録が作れます。</p>
   </div>
   <div class="card">
-    <h2>文字起こし</h2>
+    <div style="display:flex;align-items:center;gap:8px"><h2 style="flex:1;margin:0">文字起こし</h2><button id="editTx" style="min-height:38px;padding:6px 12px">✏️ 編集</button></div>
+    <p class="note hidden" id="editNote">文字をタップして直せます(自動保存)。🗑 でその行を削除。</p>
     <div class="tr" id="dLines"></div>
   </div>
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
@@ -358,9 +365,16 @@ async function openDetail(id){doc=await get(id);if(!doc)return;const m=doc;
   const noTx=!m.lines.length;$('#noTx').classList.toggle('hidden',!noTx);$('#copyBtn').disabled=noTx;$('#dlTx').disabled=noTx;
   const hasA=!!(m.audio&&m.audio.size);$('#shareAudio').disabled=!hasA;$('#dlAudio').disabled=!hasA;
   $('#audioInfo').textContent=hasA?`録音ファイル:${(m.audio.size/1048576).toFixed(1)} MB(${extOf(m.audio.type)})`:'録音ファイルはありません(字幕だけモード)';
-  $('#dLines').innerHTML=m.lines.length?m.lines.map(r=>`<div class="ln"><small>${r.time}</small>${esc(r.text)}${r.tr?`<div class="trl">→ ${esc(r.tr)}</div>`:''}</div>`).join(''):'<p class="note">なし</p>';
+  editing=false;$('#editTx').textContent='✏️ 編集';renderLines();
   show('detail')}
-let dT=null;
+let dT=null,editing=false;
+function renderLines(){const m=doc,el=$('#dLines');el.classList.toggle('editing',editing);$('#editNote').classList.toggle('hidden',!editing);
+  if(!editing){el.innerHTML=m.lines.length?m.lines.map(r=>`<div class="ln"><small>${r.time}</small>${esc(r.text)}${r.tr?`<div class="trl">→ ${esc(r.tr)}</div>`:''}</div>`).join(''):'<p class="note">なし</p>';return}
+  el.innerHTML=m.lines.map((r,i)=>`<div class="eln" data-i="${i}"><small class="note">${r.time}</small><div class="f"><textarea rows="2" data-k="text">${esc(r.text)}</textarea>${r.tr!=null?`<textarea rows="1" data-k="tr" placeholder="訳">${esc(r.tr)}</textarea>`:''}</div><button class="del danger">🗑</button></div>`).join('')||'<p class="note">なし</p>';
+  el.querySelectorAll('textarea').forEach(t=>t.oninput=()=>{const i=+t.closest('.eln').dataset.i;doc.lines[i][t.dataset.k]=t.value;saveDoc()});
+  el.querySelectorAll('.del').forEach(b=>b.onclick=()=>{const i=+b.closest('.eln').dataset.i;if(!confirm('この行を削除しますか?'))return;doc.lines.splice(i,1);saveDoc();renderLines();refreshInfo()})}
+function refreshInfo(){const m=doc;$('#dInfo').textContent=`${new Date(m.start).toLocaleString('ja-JP')}・${dur(m.duration)}・文字起こし ${m.lines.length} 行`;const noTx=!m.lines.length;$('#noTx').classList.toggle('hidden',!noTx);$('#copyBtn').disabled=noTx;$('#dlTx').disabled=noTx}
+$('#editTx').onclick=()=>{editing=!editing;$('#editTx').textContent=editing?'✓ 完了':'✏️ 編集';if(!editing)doc.lines=doc.lines.filter(r=>r.text&&r.text.trim());saveDoc();renderLines();refreshInfo()};
 function saveDoc(){clearTimeout(dT);dT=setTimeout(()=>doc&&put(doc),500)}
 $('#dName').oninput=()=>{doc.name=$('#dName').value;saveDoc()};
 $('#dNotes').oninput=()=>{doc.notes=$('#dNotes').value;saveDoc()};
@@ -369,6 +383,8 @@ $('#copyBtn').onclick=async()=>{if(await copyText(promptOf(doc))){flash($('#copy
 $('#copySum').onclick=async()=>{if(!doc.summary.trim())return toast('まだ議事録が貼り付けられていません');if(await copyText(doc.summary))flash($('#copySum'),'✓ コピーしました')};
 $('#dlSum').onclick=()=>{if(!doc.summary.trim())return toast('まだ議事録が貼り付けられていません');download(new Blob([doc.summary],{type:'text/plain'}),safe(doc.name)+'_議事録.txt')};
 $('#dlTx').onclick=()=>download(new Blob([`${doc.name}\n${new Date(doc.start).toLocaleString('ja-JP')}\n\n■ メモ\n${doc.notes||'(なし)'}\n\n■ 文字起こし\n${doc.lines.map(r=>`[${r.time}] ${r.text}`+(r.tr?`\n　→ ${r.tr}`:'')).join('\n')}\n`],{type:'text/plain'}),safe(doc.name)+'_文字起こし.txt');
+$('#dlAll').onclick=()=>{const d=doc;const t=[`■ 会議名:${d.name}`,`■ 日時:${new Date(d.start).toLocaleString('ja-JP')}(${dur(d.duration)})`,'',`■ メモ`,d.notes||'(なし)','',`■ 議事録`,d.summary||'(なし)','',`■ 文字起こし`,d.lines.map(r=>`[${r.time}] ${r.text}`+(r.tr?`\n　→ ${r.tr}`:'')).join('\n')||'(なし)',''].join('\n');
+  download(new Blob([t],{type:'text/plain'}),safe(d.name)+'_まとめ.txt')};
 function audioFile(){const e=extOf(doc.audio.type);return new File([doc.audio],safe(doc.name)+'.'+e,{type:doc.audio.type||'audio/webm'})}
 $('#dlAudio').onclick=()=>{const f=audioFile();download(f,f.name)};
 $('#shareAudio').onclick=async()=>{const f=audioFile();
