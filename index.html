@@ -118,6 +118,7 @@ h2{font-size:16px;margin:0 0 8px}
   </div>
   <div class="seg" id="tgtSeg2" style="margin-top:6px"><button data-t="auto">訳:自動</button><button data-t="ja">訳:日</button><button data-t="zh-TW">訳:中</button><button data-t="off">訳なし</button></div>
   <p class="warn hidden" id="liveWarn"></p>
+  <div id="fallBox" class="hidden" style="margin:8px 0"><button id="toManual" class="primary" style="width:100%">手動モードに切り替える(字幕を続ける)</button><p class="note">録音はそのまま続きます。自動判定はこの会議では止まります。</p></div>
   <div id="caps" style="margin-top:10px"></div>
   <label for="liveNotes">メモ(会議中に書けます)</label>
   <textarea id="liveNotes" placeholder="大事な数字・決まったことなど"></textarea>
@@ -159,7 +160,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-20i</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-20j</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -257,7 +258,7 @@ function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'
 - 発言がない・雑音だけ・聞き取れない場合は [] を返す。推測で文章を作らないこと`}
 function b64(blob){return new Promise((ok,ng)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ng(r.error);r.readAsDataURL(blob)})}
 // 生の音声(PCM)を集めて 8 秒ごとに 16kHz WAV にして送る(iPhone の m4a は Gemini が読めないことがあるため)
-let actx=null,aproc=null,abuf=[],segStart=0,lastErr='';
+let actx=null,aproc=null,abuf=[],segStart=0,lastErr='',gemOkAt=0,gemSentAt=0;
 function startPCM(m){try{actx=new (window.AudioContext||window.webkitAudioContext)();const src=actx.createMediaStreamSource(stream);aproc=actx.createScriptProcessor(4096,1,1);
   aproc.onaudioprocess=e=>{abuf.push(new Float32Array(e.inputBuffer.getChannelData(0)))};src.connect(aproc);aproc.connect(actx.destination);actx.resume();
   abuf=[];segStart=elapsed();segT=setInterval(()=>flushSeg(m),8000)}catch(e){warn('自動判定を開始できません:'+e.message)}}
@@ -269,16 +270,18 @@ function toWav(chunks,rate){let n=0;for(const c of chunks)n+=c.length;const all=
   new Int16Array(b,44).set(pcm);return {blob:new Blob([b],{type:'audio/wav'}),rms}}
 function flushSeg(m){if(!actx||!abuf.length)return;const ch=abuf;abuf=[];const t0=segStart;segStart=elapsed();const {blob,rms}=toWav(ch,actx.sampleRate);
   if(rms<0.004)return;// 無音はスキップ
+  if(!gemSentAt||gemOkAt>gemSentAt)gemSentAt=Date.now();if(gemSentAt&&gemOkAt<gemSentAt&&Date.now()-gemSentAt>40000&&cur===m)$('#fallBox').classList.remove('hidden');
   gemIn++;const pr=gemFetch(blob).finally(()=>gemIn--);if(gemIn>3&&cur===m&&!lastErr)warn('Gemini の応答が遅れています。字幕が少し遅れて出ます');
   if(interimEl&&cur===m)interimEl.textContent='(Gemini が字幕を作成中…)';gemQ=gemQ.then(()=>pr.then(res=>gemRender(m,res,t0)))}
 function stopPCM(m){clearInterval(segT);flushSeg(m);try{aproc&&aproc.disconnect();actx&&actx.close()}catch(e){}actx=null;aproc=null}
-async function gemFetch(blob){try{const txt=await gemCall([{text:gemPrompt()},{inline_data:{mime_type:blob.type,data:await b64(blob)}}],true,45000);
+async function gemFetch(blob){try{const parts=[{text:gemPrompt()},{inline_data:{mime_type:blob.type,data:await b64(blob)}}];let txt;
+  try{txt=await gemCall(parts,true,20000)}catch(e){if(e.status===400||e.status===401||e.status===403)throw e;await new Promise(ok=>setTimeout(ok,1500));txt=await gemCall(parts,true,20000)}
   let arr=[];try{arr=JSON.parse(txt)}catch(e){const mm=txt.match(/\[[\s\S]*\]/);if(mm)try{arr=JSON.parse(mm[0])}catch(_){}}return {arr:Array.isArray(arr)?arr:[]}}catch(e){return {err:e}}}
-function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;lastErr=e.message;if(cur===m){
+function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;lastErr=e.message;if(cur===m&&gemFail>=2)$('#fallBox').classList.remove('hidden');if(cur===m){
    if(e.status===429)warn('Gemini の無料の上限に達しました。録音は続いています。次の会議は通常モードで使ってください');
    else if(e.status===400||e.status===403)warn('Gemini の API キーが使えません(詳細設定を確認)。録音は続いています');
    else warn('Gemini:'+e.message+'。録音は続いています')}return}
-  gemFail=0;if(lastErr){lastErr='';$('#liveWarn').classList.add('hidden')}for(const it of res.arr)if(it&&it.text&&String(it.text).trim())addLine(String(it.text),{m,t:t0,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});
+  gemFail=0;gemOkAt=Date.now();$('#fallBox').classList.add('hidden');if(lastErr){lastErr='';$('#liveWarn').classList.add('hidden')}for(const it of res.arr)if(it&&it.text&&String(it.text).trim())addLine(String(it.text),{m,t:t0,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});
   if(interimEl&&cur===m)interimEl.textContent=gemIn?'(Gemini が字幕を作成中…)':''}
 
 // ---------- 一覧 ----------
@@ -323,7 +326,7 @@ async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':
     try{mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream)}catch(e){toast('この端末では録音できません:'+e.message);stream.getTracks().forEach(t=>t.stop());cur=null;return}
     cur.mime=mr.mimeType||mime;seq=0;const mid=cur.id;
     mr.ondataavailable=e=>{if(e.data&&e.data.size)tx('chunks','readwrite',s=>s.put({mid,seq:seq++,blob:e.data}))};
-    mr.start(5000);if(isGem){lastErr='';startPCM(cur)}}
+    mr.start(5000);if(isGem){lastErr='';gemFail=0;gemOkAt=0;gemSentAt=0;$('#fallBox').classList.add('hidden');startPCM(cur)}}
   await put(stripLive(cur));
   $('#caps').innerHTML='';interimEl=document.createElement('div');interimEl.className='ln int';$('#caps').appendChild(interimEl);
   $('#liveNotes').value='';$('#liveWarn').classList.add('hidden');
@@ -333,6 +336,9 @@ async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':
   setLangUI();show('live');keepAwake();if(useCap)startSR();
   clearInterval(srWatch);if(useCap)srWatch=setInterval(()=>{if(!cur||!rec)return;const t=interimEl.textContent;if(itStart&&(Date.now()-itStart>10000||t.length>90))forceCommit()},1000);
   tick=setInterval(()=>{const s=Math.floor(elapsed());$('#timer').textContent=(s>=3600?pad(Math.floor(s/3600))+':':'')+pad(Math.floor(s%3600/60))+':'+pad(s%60)},500)}
+$('#toManual').onclick=()=>{const m=cur;if(!m||!m.gem)return;stopPCM(m);m.gem=false;m.mode='both';$('#fallBox').classList.add('hidden');$('#liveWarn').classList.add('hidden');
+  $('#langSeg2').classList.remove('hidden');$('#tgtSeg2').classList.remove('hidden');$('#liveMode').textContent='録音中・字幕あり(手動)';
+  if(SR){m.useCap=true;interimEl.textContent='';startSR();toast('手動モードに切り替えました。話している言語のボタンを押してください')}else toast('このブラウザは手動字幕に対応していません。録音は続いています')};
 $('#liveNotes').oninput=()=>{if(cur){cur.notes=$('#liveNotes').value;saveSoon()}};
 $('#startBtn').onclick=startMeeting;
 $('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);clearInterval(srWatch);
