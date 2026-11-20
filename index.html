@@ -66,6 +66,9 @@ h2{font-size:16px;margin:0 0 8px}
     <p class="note">会議中でも切り替えできます。話している言語に合わせてください。</p>
     <label>翻訳(字幕の下に表示)</label>
     <div class="seg" id="tgtSeg"><button data-t="ja">日本語に</button><button data-t="zh-TW">中文に</button><button data-t="off">なし</button></div>
+    <details style="margin-top:8px"><summary class="note">翻訳の上限を増やす(無料・おすすめ)</summary>
+      <p class="note">メールアドレスを入れると、無料翻訳の上限が 1 日約 10 倍(約 5 万文字)になります。アドレスは翻訳サービス(MyMemory)に送られるだけで、登録や確認メールはありません。</p>
+      <input id="trMail" type="email" placeholder="例:name@example.com" autocomplete="email"></details>
     <label for="mode">モード</label>
     <select id="mode">
       <option value="both">録音 ＋ 字幕(おすすめ)</option>
@@ -175,12 +178,13 @@ document.querySelectorAll('#langSeg button,#langSeg2 button').forEach(b=>b.oncli
 function setTgtUI(){document.querySelectorAll('#tgtSeg button,#tgtSeg2 button').forEach(b=>b.classList.toggle('on',b.dataset.t===tgt))}
 setTgtUI();document.querySelectorAll('#tgtSeg button,#tgtSeg2 button').forEach(b=>b.onclick=()=>{tgt=b.dataset.t;try{localStorage.setItem('tgt',tgt)}catch(e){}setTgtUI()});
 // ---------- 翻訳(MyMemory 無料 API) ----------
-const SRC={'ja-JP':'ja','zh-TW':'zh-TW','en-US':'en'};let trQ=Promise.resolve(),trStop=false;
+const SRC={'ja-JP':'ja','zh-TW':'zh-TW','en-US':'en'};let trQ=Promise.resolve(),trStop=false;let trMail='';try{trMail=localStorage.getItem('trMail')||''}catch(e){}
+$('#trMail').value=trMail;$('#trMail').onchange=()=>{trMail=$('#trMail').value.trim();try{localStorage.setItem('trMail',trMail)}catch(e){}trStop=false;toast(trMail?'翻訳の上限を増やしました':'メールアドレスを消しました')};
 function needTr(r){if(tgt==='off'||trStop)return false;const s=SRC[r.lang]||'ja';return !(s===tgt||(s.startsWith('zh')&&tgt.startsWith('zh')))}
 function translate(r,el){if(!needTr(r))return;const pair=(SRC[r.lang]||'ja')+'|'+tgt,q=r.text.slice(0,450);
-  trQ=trQ.then(async()=>{if(trStop)return;try{const j=await (await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(q)+'&langpair='+encodeURIComponent(pair))).json();
+  trQ=trQ.then(async()=>{if(trStop)return;try{const j=await (await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(q)+'&langpair='+encodeURIComponent(pair)+(/.+@.+\..+/.test(trMail)?'&de='+encodeURIComponent(trMail):''))).json();
     const t=(j.responseData&&j.responseData.translatedText)||'';
-    if(j.quotaFinished||/MYMEMORY WARNING/i.test(t)){trStop=true;warn('今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています');return}
+    if(j.quotaFinished||/MYMEMORY WARNING/i.test(t)){trStop=true;warn(trMail?'今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています':'今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています。次回からはホームの「翻訳の上限を増やす」にメールアドレスを入れてください');return}
     if(+j.responseStatus!==200||!t)return;r.tr=t;el.textContent='→ '+t;saveSoon()}catch(e){}})}
 $('#mode').onchange=()=>{try{localStorage.setItem('mode',$('#mode').value)}catch(e){}};
 if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対応していません。Android は Chrome、iPhone は Safari で開いてください。録音だけは使えます。';$('#srErr').classList.remove('hidden')}
