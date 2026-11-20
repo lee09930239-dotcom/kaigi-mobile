@@ -156,6 +156,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
+<p class="note" style="text-align:center;margin-top:24px">バージョン 2026-11-20f</p>
 <div id="toast"></div>
 
 <script>
@@ -222,8 +223,8 @@ async function gemCall(parts,json,ms=60000){let last='',lastSt=0;for(const md of
     const j=await r.json().catch(()=>({}));if([404,429,500,503].includes(r.status)){last=r.status+' '+((j.error&&j.error.message)||'');lastSt=r.status;continue}
     if(!r.ok){const e=new Error((j.error&&j.error.message)||('HTTP '+r.status));e.status=r.status;throw e}
     return ((j.candidates||[])[0]?.content?.parts||[]).map(p=>p.text||'').join('')}
-  catch(e){if(e.name==='AbortError'){const x=new Error('Gemini から応答がありません');x.status=0;throw x}throw e}finally{clearTimeout(t)}}
-  const e=new Error(lastSt===503||lastSt===500?'Gemini が混雑しています。少し待ってからお試しください':lastSt===429?'Gemini の無料の上限に達しました':'使えるモデルが見つかりません('+last+')');e.status=lastSt;throw e}
+  catch(e){if(e.name==='AbortError'){last='応答なし';lastSt=lastSt||-1;continue}throw e}finally{clearTimeout(t)}}
+  const e=new Error(lastSt===503||lastSt===500?'Gemini が混雑しています。少し待ってからお試しください':lastSt===429?'Gemini の無料の上限に達しました':lastSt===-1?'Gemini から応答がありません(混雑またはネットワーク)':'使えるモデルが見つかりません('+last+')');e.status=lastSt;throw e}
 $('#gemSave').onclick=async()=>{const k=$('#gemKey').value.trim();if(!k)return toast('キーを貼り付けてください');const old=gemKey;gemKey=k;
   $('#gemMsg').textContent='テスト中…';$('#gemSave').disabled=true;
   let saved=true;try{localStorage.setItem('gemKey',k)}catch(e){saved=false}
@@ -289,7 +290,7 @@ function startSR(){if(!SR||!cur)return;itStart=0;const r=new SR();rec=r;r.lang=l
   try{r.start()}catch(e){rec=null}}
 async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':$('#mode').value;
   if(mode==='gem'){$('#startBtn').disabled=true;$('#startBtn').textContent='Gemini に接続確認中…';
-    try{await gemCall([{text:'「OK」とだけ返してください。'}],false,10000)}
+    try{await gemCall([{text:'「OK」とだけ返してください。'}],false,8000)}
     catch(e){const ok=confirm('Gemini を使えません:'+e.message+(e.status===503||e.status===500||e.status===429?'':'\n会社の Wi-Fi などで制限されている可能性があります。')+'\n\n「OK」:通常モード(録音＋字幕・言語は手動切り替え)で始める\n「キャンセル」:始めない(モバイル通信に切り替えてからもう一度)');
       if(!ok){$('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める';return}mode='both';toast('通常モードで始めます')}
     $('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める'}const isGem=mode==='gem';const useRec=mode!=='cap',useCap=!isGem&&mode!=='rec'&&!!SR;
