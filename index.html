@@ -236,7 +236,7 @@ function gemPrompt(){const to=tgt==='off'?'':tgt==='ja'?'日本語':'繁體中�
 - ${to?`lang が${tgt==='ja'?' ja':' zh'} のときは tr を空文字にする`:'tr は常に空文字'}
 - 発言がない・雑音だけ・聞き取れない場合は [] を返す。推測で文章を作らないこと`}
 function b64(blob){return new Promise((ok,ng)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ng(r.error);r.readAsDataURL(blob)})}
-function segLoop(m){if(!stream||!m.gem)return;let r2;const mt=(m.mime||'').split(';')[0];try{r2=mt?new MediaRecorder(stream,{mimeType:m.mime}):new MediaRecorder(stream)}catch(e){warn('自動判定を開始できません:'+e.message);return}
+function segLoop(m){if(!stream||!m.gem)return;let r2;const mt=(m.mime||'').split(';')[0];const o2={audioBitsPerSecond:32000};try{r2=mt?new MediaRecorder(stream,{mimeType:m.mime,...o2}):new MediaRecorder(stream,o2)}catch(e){warn('自動判定を開始できません:'+e.message);return}
   const parts=[];const t0=elapsed();r2.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data)};
   r2.onstop=()=>{const b=new Blob(parts,{type:mt||r2.mimeType.split(';')[0]||'audio/webm'});if(b.size>2000)gemQ=gemQ.then(()=>gemSeg(m,b,t0));if(m.gem&&cur===m)segLoop(m)};
   segRec=r2;r2.start();segT=setTimeout(()=>{if(r2.state!=='inactive')r2.stop()},8000)}
@@ -276,7 +276,12 @@ function startSR(){if(!SR||!cur)return;const r=new SR();rec=r;r.lang=lang;r.cont
     else if(e.error==='audio-capture')warn('字幕用にマイクが使えません。「字幕だけ」または「録音だけ」モードをお試しください')};
   r.onend=()=>{if(rec===r)rec=null;interimEl&&(interimEl.textContent='');if(cur&&cur.useCap&&document.visibilityState==='visible')setTimeout(()=>{if(cur&&!rec)startSR()},250)};
   try{r.start()}catch(e){rec=null}}
-async function startMeeting(){const mode=$('#mode').value==='gem'&&!gemKey?'both':$('#mode').value;const isGem=mode==='gem';const useRec=mode!=='cap',useCap=!isGem&&mode!=='rec'&&!!SR;
+async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':$('#mode').value;
+  if(mode==='gem'){$('#startBtn').disabled=true;$('#startBtn').textContent='Gemini に接続確認中…';
+    try{await gemCall([{text:'「OK」とだけ返してください。'}],false,10000)}
+    catch(e){const ok=confirm('Gemini に接続できません('+e.message+')。\n会社の Wi-Fi などで制限されている可能性があります。\n\n「OK」:通常モード(録音＋字幕・言語は手動切り替え)で始める\n「キャンセル」:始めない(モバイル通信に切り替えてからもう一度)');
+      if(!ok){$('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める';return}mode='both';toast('通常モードで始めます')}
+    $('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める'}const isGem=mode==='gem';const useRec=mode!=='cap',useCap=!isGem&&mode!=='rec'&&!!SR;
   if(!useRec&&!useCap){toast('このブラウザでは字幕が使えません。「録音」モードを選んでください');return}
   const now=Date.now();cur={id:now,start:now,name:$('#newName').value.trim()||`${new Date(now).toLocaleDateString('ja-JP')} 会議`,notes:'',summary:'',lines:[],langs:[{t:0,lang}],mode,gem:isGem,duration:0,status:'recording',audio:null,mime:'',useCap};
   if(useRec){try{stream=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){toast('マイクを使えません:'+e.message);cur=null;return}
