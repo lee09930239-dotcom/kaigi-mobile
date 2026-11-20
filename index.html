@@ -64,23 +64,26 @@ h2{font-size:16px;margin:0 0 8px}
 <!-- ホーム -->
 <section id="home">
   <div class="card">
-    <h2>認識する言語</h2>
-    <div class="seg" id="langSeg">
-      <button data-l="ja-JP" class="on">日本語</button><button data-l="zh-TW">中文</button><button data-l="en-US">English</button>
-    </div>
-    <p class="note">会議中でも切り替えできます。話している言語に合わせてください。</p>
-    <label>翻訳(字幕の下に表示)</label>
-    <div class="seg" id="tgtSeg"><button data-t="auto">自動 日⇄中</button><button data-t="ja">日本語に</button><button data-t="zh-TW">中文に</button><button data-t="off">なし</button></div>
-    <details style="margin-top:8px"><summary class="note">翻訳の上限を増やす(無料・おすすめ)</summary>
-      <p class="note">メールアドレスを入れると、無料翻訳の上限が 1 日約 10 倍(約 5 万文字)になります。アドレスは翻訳サービス(MyMemory)に送られるだけで、登録や確認メールはありません。</p>
-      <input id="trMail" type="email" placeholder="例:name@example.com" autocomplete="email"></details>
-    <label for="mode">モード</label>
+    <label for="mode" style="margin-top:0">モード</label>
     <select id="mode">
-      <option value="gem" id="gemOpt" hidden>自動判定(Gemini)・録音＋翻訳字幕(おすすめ)</option>
+      <option value="gem" id="gemOpt" hidden>自動判定(Gemini)おすすめ</option>
       <option value="both">録音 ＋ 字幕</option>
       <option value="cap">字幕だけ</option>
       <option value="rec">録音だけ</option>
     </select>
+    <p class="note hidden" id="autoNote">✓ 話している言語(日本語・中文・English)を自動で判定します。</p>
+    <div id="langBlock"><label>認識する言語</label>
+    <div class="seg" id="langSeg">
+      <button data-l="ja-JP" class="on">日本語</button><button data-l="zh-TW">中文</button><button data-l="en-US">English</button>
+    </div>
+    <p class="note">会議中でも切り替えできます。話している言語に合わせてください。</p></div>
+    <label>翻訳(字幕の下に表示)</label>
+    <p class="note" style="margin:0 0 6px">「自動」:日本語の発言は中文に、中文・English の発言は日本語に訳します</p>
+    <div class="seg" id="tgtSeg"><button data-t="auto">自動</button><button data-t="ja">日本語</button><button data-t="zh-TW">中文</button><button data-t="off">なし</button></div>
+    <details style="margin-top:8px" id="mailBox"><summary class="note">翻訳の上限を増やす(無料・おすすめ)</summary>
+      <p class="note">メールアドレスを入れると、無料翻訳の上限が 1 日約 10 倍(約 5 万文字)になります。アドレスは翻訳サービス(MyMemory)に送られるだけで、登録や確認メールはありません。</p>
+      <input id="trMail" type="email" placeholder="例:name@example.com" autocomplete="email"></details>
+
     <label for="newName">会議名(あとで変更できます)</label>
     <input id="newName" placeholder="例:〇〇社 打ち合わせ">
     <div style="margin-top:12px"><button id="startBtn" class="primary big">● 会議を始める</button></div>
@@ -156,7 +159,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-20g</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-20h</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -215,14 +218,15 @@ function translate(r,el){if(!needTr(r))return;const pair=(SRC[r.lang]||'ja')+'|'
     const t=(j.responseData&&j.responseData.translatedText)||'';
     if(j.quotaFinished||/MYMEMORY WARNING/i.test(t)){trStop=true;warn(trMail?'今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています':'今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています。次回からはホームの「翻訳の上限を増やす」にメールアドレスを入れてください');return}
     if(+j.responseStatus!==200||!t)return;r.tr=t;el.textContent='→ '+t;saveSoon()}catch(e){}})}
-$('#mode').onchange=()=>{try{localStorage.setItem('mode',$('#mode').value)}catch(e){}};
+function modeUI(){const g=$('#mode').value==='gem';$('#langBlock').classList.toggle('hidden',g);$('#autoNote').classList.toggle('hidden',!g);$('#mailBox').classList.toggle('hidden',g)}
+$('#mode').onchange=()=>{try{localStorage.setItem('mode',$('#mode').value)}catch(e){}modeUI()};
 if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対応していません。Android は Chrome、iPhone は Safari で開いてください。録音だけは使えます。';$('#srErr').classList.remove('hidden')}
 
 // ---------- Gemini 自動判定 ----------
 let gemKey='';try{gemKey=localStorage.getItem('gemKey')||''}catch(e){}
 const GEM_MODELS=['gemini-flash-latest','gemini-2.5-flash','gemini-flash-lite-latest','gemini-2.5-flash-lite'];
 function gemUI(){$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
-  if(!gemKey&&$('#mode').value==='gem')$('#mode').value='both'}
+  if(!gemKey&&$('#mode').value==='gem')$('#mode').value='both';if(window.modeUI)modeUI()}
 async function gemCall(parts,json,ms=60000){let last='',lastSt=0;for(const md of GEM_MODELS){const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
   try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${md}:generateContent`,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','x-goog-api-key':gemKey},
     body:JSON.stringify({contents:[{parts}],generationConfig:json?{responseMimeType:'application/json',temperature:0}:{temperature:0}})});
@@ -242,7 +246,7 @@ $('#gemSave').onclick=async()=>{const k=$('#gemKey').value.trim();if(!k)return t
   if(!saved)$('#gemMsg').innerHTML+='<br><span class="err">このブラウザではキーを保存できません(プライベートモードでは保存されません)</span>';
   $('#gemSave').disabled=false;gemUI()};
 $('#gemDel').onclick=()=>{if(!confirm('保存した API キーを削除しますか?'))return;gemKey='';try{localStorage.removeItem('gemKey')}catch(e){}$('#gemMsg').textContent='削除しました';gemUI()};
-gemUI();
+gemUI();modeUI();
 const GL={ja:'ja-JP',zh:'zh-TW',en:'en-US'};
 let segRec=null,segT=null,gemQ=Promise.resolve(),gemFail=0,gemIn=0;
 function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'?'tr:lang が ja なら繁體中文訳、zh または en なら日本語訳':tgt==='ja'?'tr:日本語訳(lang が ja なら空文字)':'tr:繁體中文訳(lang が zh なら空文字)';
