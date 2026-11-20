@@ -70,16 +70,16 @@ h2{font-size:16px;margin:0 0 8px}
     </div>
     <p class="note">会議中でも切り替えできます。話している言語に合わせてください。</p>
     <label>翻訳(字幕の下に表示)</label>
-    <div class="seg" id="tgtSeg"><button data-t="ja">日本語に</button><button data-t="zh-TW">中文に</button><button data-t="off">なし</button></div>
+    <div class="seg" id="tgtSeg"><button data-t="auto">自動 日⇄中</button><button data-t="ja">日本語に</button><button data-t="zh-TW">中文に</button><button data-t="off">なし</button></div>
     <details style="margin-top:8px"><summary class="note">翻訳の上限を増やす(無料・おすすめ)</summary>
       <p class="note">メールアドレスを入れると、無料翻訳の上限が 1 日約 10 倍(約 5 万文字)になります。アドレスは翻訳サービス(MyMemory)に送られるだけで、登録や確認メールはありません。</p>
       <input id="trMail" type="email" placeholder="例:name@example.com" autocomplete="email"></details>
     <label for="mode">モード</label>
     <select id="mode">
-      <option value="both">録音 ＋ 字幕(おすすめ)</option>
+      <option value="gem" id="gemOpt" hidden>自動判定(Gemini)・録音＋翻訳字幕(おすすめ)</option>
+      <option value="both">録音 ＋ 字幕</option>
       <option value="cap">字幕だけ</option>
       <option value="rec">録音だけ</option>
-      <option value="gem" id="gemOpt" hidden>自動判定(Gemini)・録音＋翻訳字幕</option>
     </select>
     <label for="newName">会議名(あとで変更できます)</label>
     <input id="newName" placeholder="例:〇〇社 打ち合わせ">
@@ -113,7 +113,7 @@ h2{font-size:16px;margin:0 0 8px}
   <div class="seg" id="langSeg2">
     <button data-l="ja-JP">日本語</button><button data-l="zh-TW">中文</button><button data-l="en-US">English</button>
   </div>
-  <div class="seg" id="tgtSeg2" style="margin-top:6px"><button data-t="ja">訳:日本語</button><button data-t="zh-TW">訳:中文</button><button data-t="off">訳なし</button></div>
+  <div class="seg" id="tgtSeg2" style="margin-top:6px"><button data-t="auto">訳:日⇄中</button><button data-t="ja">訳:日本語</button><button data-t="zh-TW">訳:中文</button><button data-t="off">訳なし</button></div>
   <p class="warn hidden" id="liveWarn"></p>
   <div id="caps" style="margin-top:10px"></div>
   <label for="liveNotes">メモ(会議中に書けます)</label>
@@ -162,7 +162,7 @@ h2{font-size:16px;margin:0 0 8px}
 const $=s=>document.querySelector(s);
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const LANGN={'ja-JP':'日本語','zh-TW':'中文','en-US':'English'};
-let lang=localStorage.getItem('lang')||'ja-JP';let tgt='ja';try{tgt=localStorage.getItem('tgt')||'ja'}catch(e){}
+let lang=localStorage.getItem('lang')||'ja-JP';let tgt='auto';try{tgt=localStorage.getItem('tgt2')||'auto'}catch(e){}
 try{const m=localStorage.getItem('mode');if(m)$('#mode').value=m}catch(e){}
 
 // ---------- IndexedDB ----------
@@ -197,12 +197,13 @@ setLangUI();
 document.querySelectorAll('#langSeg button,#langSeg2 button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;try{localStorage.setItem('lang',lang)}catch(e){}setLangUI();
   if(cur){cur.langs.push({t:elapsed(),lang});if(rec){try{rec.stop()}catch(e){}}toast(LANGN[lang]+' に切り替えました')}});
 function setTgtUI(){document.querySelectorAll('#tgtSeg button,#tgtSeg2 button').forEach(b=>b.classList.toggle('on',b.dataset.t===tgt))}
-setTgtUI();document.querySelectorAll('#tgtSeg button,#tgtSeg2 button').forEach(b=>b.onclick=()=>{tgt=b.dataset.t;try{localStorage.setItem('tgt',tgt)}catch(e){}setTgtUI()});
+setTgtUI();document.querySelectorAll('#tgtSeg button,#tgtSeg2 button').forEach(b=>b.onclick=()=>{tgt=b.dataset.t;try{localStorage.setItem('tgt2',tgt)}catch(e){}setTgtUI()});
 // ---------- 翻訳(MyMemory 無料 API) ----------
 const SRC={'ja-JP':'ja','zh-TW':'zh-TW','en-US':'en'};let trQ=Promise.resolve(),trStop=false;let trMail='';try{trMail=localStorage.getItem('trMail')||''}catch(e){}
 $('#trMail').value=trMail;$('#trMail').onchange=()=>{trMail=$('#trMail').value.trim();try{localStorage.setItem('trMail',trMail)}catch(e){}trStop=false;toast(trMail?'翻訳の上限を増やしました':'メールアドレスを消しました')};
-function needTr(r){if(tgt==='off'||trStop)return false;const s=SRC[r.lang]||'ja';return !(s===tgt||(s.startsWith('zh')&&tgt.startsWith('zh')))}
-function translate(r,el){if(!needTr(r))return;const pair=(SRC[r.lang]||'ja')+'|'+tgt,q=r.text.slice(0,450);
+function tgtFor(lg){if(tgt!=='auto')return tgt;return lg==='ja-JP'?'zh-TW':'ja'}
+function needTr(r){if(tgt==='off'||trStop)return false;const s=SRC[r.lang]||'ja',t=tgtFor(r.lang);return !(s===t||(s.startsWith('zh')&&t.startsWith('zh')))}
+function translate(r,el){if(!needTr(r))return;const pair=(SRC[r.lang]||'ja')+'|'+tgtFor(r.lang),q=r.text.slice(0,450);
   trQ=trQ.then(async()=>{if(trStop)return;try{const j=await (await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(q)+'&langpair='+encodeURIComponent(pair)+(/.+@.+\..+/.test(trMail)?'&de='+encodeURIComponent(trMail):''))).json();
     const t=(j.responseData&&j.responseData.translatedText)||'';
     if(j.quotaFinished||/MYMEMORY WARNING/i.test(t)){trStop=true;warn(trMail?'今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています':'今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています。次回からはホームの「翻訳の上限を増やす」にメールアドレスを入れてください');return}
@@ -213,7 +214,7 @@ if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対
 // ---------- Gemini 自動判定 ----------
 let gemKey='';try{gemKey=localStorage.getItem('gemKey')||''}catch(e){}
 const GEM_MODELS=['gemini-flash-latest','gemini-2.5-flash','gemini-flash-lite-latest','gemini-2.5-flash-lite'];
-function gemUI(){$('#gemOpt').hidden=!gemKey;$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
+function gemUI(){$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
   if(!gemKey&&$('#mode').value==='gem')$('#mode').value='both'}
 async function gemCall(parts,json,ms=60000){let last='',lastSt=0;for(const md of GEM_MODELS){const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
   try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${md}:generateContent`,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','x-goog-api-key':gemKey},
@@ -237,11 +238,11 @@ $('#gemDel').onclick=()=>{if(!confirm('保存した API キーを削除します
 gemUI();
 const GL={ja:'ja-JP',zh:'zh-TW',en:'en-US'};
 let segRec=null,segT=null,gemQ=Promise.resolve(),gemFail=0;
-function gemPrompt(){const to=tgt==='off'?'':tgt==='ja'?'日本語':'繁體中文';
+function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'?'tr:lang が ja なら繁體中文訳、zh または en なら日本語訳':tgt==='ja'?'tr:日本語訳(lang が ja なら空文字)':'tr:繁體中文訳(lang が zh なら空文字)';
   return `この音声は会議の一部(約8秒)です。話されている内容を正確に文字起こししてください。
-出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま(中国語は繁體字)","tr":"${to?to+'訳':'空文字'}"}]
+出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま(中国語は繁體字)","tr":"訳"}]
 - 発言の区切りごとに1要素
-- ${to?`lang が${tgt==='ja'?' ja':' zh'} のときは tr を空文字にする`:'tr は常に空文字'}
+- ${rule}
 - 発言がない・雑音だけ・聞き取れない場合は [] を返す。推測で文章を作らないこと`}
 function b64(blob){return new Promise((ok,ng)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ng(r.error);r.readAsDataURL(blob)})}
 function segLoop(m){if(!stream||!m.gem)return;let r2;const mt=(m.mime||'').split(';')[0];const o2={audioBitsPerSecond:32000};try{r2=mt?new MediaRecorder(stream,{mimeType:m.mime,...o2}):new MediaRecorder(stream,o2)}catch(e){warn('自動判定を開始できません:'+e.message);return}
