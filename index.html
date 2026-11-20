@@ -237,7 +237,7 @@ $('#gemSave').onclick=async()=>{const k=$('#gemKey').value.trim();if(!k)return t
 $('#gemDel').onclick=()=>{if(!confirm('保存した API キーを削除しますか?'))return;gemKey='';try{localStorage.removeItem('gemKey')}catch(e){}$('#gemMsg').textContent='削除しました';gemUI()};
 gemUI();
 const GL={ja:'ja-JP',zh:'zh-TW',en:'en-US'};
-let segRec=null,segT=null,gemQ=Promise.resolve(),gemFail=0;
+let segRec=null,segT=null,gemQ=Promise.resolve(),gemFail=0,gemIn=0;
 function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'?'tr:lang が ja なら繁體中文訳、zh または en なら日本語訳':tgt==='ja'?'tr:日本語訳(lang が ja なら空文字)':'tr:繁體中文訳(lang が zh なら空文字)';
   return `この音声は会議の一部(約8秒)です。話されている内容を正確に文字起こししてください。
 出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま(中国語は繁體字)","tr":"訳"}]
@@ -246,18 +246,17 @@ function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'
 - 発言がない・雑音だけ・聞き取れない場合は [] を返す。推測で文章を作らないこと`}
 function b64(blob){return new Promise((ok,ng)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ng(r.error);r.readAsDataURL(blob)})}
 function segLoop(m){if(!stream||!m.gem)return;let r2;const mt=(m.mime||'').split(';')[0];const o2={audioBitsPerSecond:32000};try{r2=mt?new MediaRecorder(stream,{mimeType:m.mime,...o2}):new MediaRecorder(stream,o2)}catch(e){warn('自動判定を開始できません:'+e.message);return}
-  const parts=[];const t0=elapsed();r2.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data)};
-  r2.onstop=()=>{const b=new Blob(parts,{type:mt||r2.mimeType.split(';')[0]||'audio/webm'});if(b.size>2000)gemQ=gemQ.then(()=>gemSeg(m,b,t0));if(m.gem&&cur===m)segLoop(m)};
+  const parts=[];const t0=elapsed();r2.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data)};if(interimEl&&cur===m&&gemIn)interimEl.textContent='(Gemini が字幕を作成中…)';
+  r2.onstop=()=>{const b=new Blob(parts,{type:mt||r2.mimeType.split(';')[0]||'audio/webm'});if(b.size>2000){gemIn++;const pr=gemFetch(b).finally(()=>gemIn--);if(gemIn>3&&cur===m)warn('Gemini の応答が遅れています。字幕が少し遅れて出ます');gemQ=gemQ.then(()=>pr.then(res=>gemRender(m,res,t0)))}if(m.gem&&cur===m)segLoop(m)};
   segRec=r2;r2.start();segT=setTimeout(()=>{if(r2.state!=='inactive')r2.stop()},8000)}
-async function gemSeg(m,blob,t0){try{interimEl&&cur===m&&(interimEl.textContent='(Gemini が字幕を作成中…)');
-  const txt=await gemCall([{text:gemPrompt()},{inline_data:{mime_type:blob.type,data:await b64(blob)}}],true,45000);
-  let arr=[];try{arr=JSON.parse(txt)}catch(e){const mm=txt.match(/\[[\s\S]*\]/);if(mm)try{arr=JSON.parse(mm[0])}catch(_){}}
-  gemFail=0;for(const it of (Array.isArray(arr)?arr:[]))if(it&&it.text&&String(it.text).trim())addLine(String(it.text),{m,t:t0,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});
-  if(interimEl&&cur===m)interimEl.textContent=''}
- catch(e){gemFail++;if(cur===m){interimEl&&(interimEl.textContent='');
+async function gemFetch(blob){try{const txt=await gemCall([{text:gemPrompt()},{inline_data:{mime_type:blob.type,data:await b64(blob)}}],true,45000);
+  let arr=[];try{arr=JSON.parse(txt)}catch(e){const mm=txt.match(/\[[\s\S]*\]/);if(mm)try{arr=JSON.parse(mm[0])}catch(_){}}return {arr:Array.isArray(arr)?arr:[]}}catch(e){return {err:e}}}
+function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;if(cur===m){
    if(e.status===429)warn('Gemini の無料の上限に達しました。録音は続いています。次の会議は通常モードで使ってください');
    else if(e.status===400||e.status===403)warn('Gemini の API キーが使えません(詳細設定を確認)。録音は続いています');
-   else warn('Gemini に接続できません('+e.message+')。録音は続いています')}}}
+   else warn('Gemini:'+e.message+'。録音は続いています')}return}
+  gemFail=0;for(const it of res.arr)if(it&&it.text&&String(it.text).trim())addLine(String(it.text),{m,t:t0,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});
+  if(interimEl&&cur===m)interimEl.textContent=gemIn?'(Gemini が字幕を作成中…)':''}
 
 // ---------- 一覧 ----------
 async function renderList(){const ms=(await all()).sort((a,b)=>b.id-a.id);const el=$('#list');
@@ -277,9 +276,12 @@ function warn(t){const w=$('#liveWarn');w.textContent='⚠ '+t;w.classList.remov
 function addLine(text,o={}){const m=o.m||cur;if(!m)return;const t=o.t!=null?o.t:elapsed();const r={t,time:hms(new Date(m.start+t*1000)),lang:o.lang||lang,text:text.trim()};if(o.tr)r.tr=o.tr;if(!r.text)return;m.lines.push(r);
   if(m!==cur){put(m);return}
   const d=document.createElement('div');d.className='ln';d.innerHTML=`<small>${r.time}</small>${esc(r.text)}<div class="trl"></div>`;$('#caps').insertBefore(d,interimEl);$('#caps').scrollTop=1e9;saveSoon();if(o.gem){if(r.tr)d.querySelector('.trl').textContent='→ '+r.tr}else translate(r,d.querySelector('.trl'))}
-function startSR(){if(!SR||!cur)return;const r=new SR();rec=r;r.lang=lang;r.continuous=true;r.interimResults=true;r.maxAlternatives=1;
-  r.onresult=e=>{let it='';for(let i=e.resultIndex;i<e.results.length;i++){const x=e.results[i];if(x.isFinal)addLine(x[0].transcript);else it+=x[0].transcript}
-    interimEl.textContent=it;$('#caps').scrollTop=1e9};
+let itStart=0,srWatch=null;
+// 長く話し続けて区切りが来ないとき:途中までを確定して認識をやり直す
+function forceCommit(){const r=rec,t=interimEl&&interimEl.textContent.trim();if(!r||!t)return;r._skip=true;itStart=0;addLine(t);interimEl.textContent='';try{r.abort?r.abort():r.stop()}catch(e){}}
+function startSR(){if(!SR||!cur)return;itStart=0;const r=new SR();rec=r;r.lang=lang;r.continuous=true;r.interimResults=true;r.maxAlternatives=1;
+  r.onresult=e=>{if(r._skip)return;let it='';for(let i=e.resultIndex;i<e.results.length;i++){const x=e.results[i];if(x.isFinal)addLine(x[0].transcript);else it+=x[0].transcript}
+    if(it&&!itStart)itStart=Date.now();if(!it)itStart=0;interimEl.textContent=it;$('#caps').scrollTop=1e9};
   r.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){warn('字幕の許可がありません。ブラウザの設定でマイクと音声認識を許可してください');cur&&(cur.useCap=false)}
     else if(e.error==='network')warn('インターネットに接続できないため字幕が止まっています。録音は続いています')
     else if(e.error==='audio-capture')warn('字幕用にマイクが使えません。「字幕だけ」または「録音だけ」モードをお試しください')};
@@ -306,10 +308,11 @@ async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':
   if(isGem)interimEl.textContent='(言語は自動判定。約 8 秒ごとに字幕が出ます)';
   if(!useCap&&!isGem)interimEl.textContent='(字幕なしモード。録音は続いています)';
   setLangUI();show('live');keepAwake();if(useCap)startSR();
+  clearInterval(srWatch);if(useCap)srWatch=setInterval(()=>{if(!cur||!rec)return;const t=interimEl.textContent;if(itStart&&(Date.now()-itStart>10000||t.length>90))forceCommit()},1000);
   tick=setInterval(()=>{const s=Math.floor(elapsed());$('#timer').textContent=(s>=3600?pad(Math.floor(s/3600))+':':'')+pad(Math.floor(s%3600/60))+':'+pad(s%60)},500)}
 $('#liveNotes').oninput=()=>{if(cur){cur.notes=$('#liveNotes').value;saveSoon()}};
 $('#startBtn').onclick=startMeeting;
-$('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);
+$('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);clearInterval(srWatch);
   if(rec){const r=rec;rec=null;try{r.stop()}catch(e){}}
   if(m.gem){m.gem=false;clearTimeout(segT);if(segRec&&segRec.state!=='inactive'){await new Promise(ok=>{segRec.addEventListener('stop',()=>setTimeout(ok,50),{once:true});segRec.stop()})}
     toast('最後の字幕を作成中…');await Promise.race([gemQ,new Promise(ok=>setTimeout(ok,40000))])}
