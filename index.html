@@ -156,7 +156,8 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン 2026-11-20f</p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-20g</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
 <script>
@@ -166,6 +167,11 @@ const LANGN={'ja-JP':'日本語','zh-TW':'中文','en-US':'English'};
 let lang=localStorage.getItem('lang')||'ja-JP';let tgt='auto';try{tgt=localStorage.getItem('tgt2')||'auto'}catch(e){}
 try{const m=localStorage.getItem('mode');if(m)$('#mode').value=m}catch(e){}
 
+// ---------- 更新の確認 ----------
+function reloadFresh(){if(cur)return toast('会議中は更新できません。会議を終えてから押してください');location.replace(location.pathname+'?v='+Date.now())}
+$('#updBtn').onclick=reloadFresh;$('#updNow').onclick=reloadFresh;
+(async()=>{try{const t=await (await fetch(location.pathname+'?check='+Date.now(),{cache:'no-store'})).text();const m=t.match(/id="ver">([^<]+)</);
+  if(m&&m[1]!==$('#ver').textContent)$('#updBar').classList.remove('hidden')}catch(e){}})();
 // ---------- IndexedDB ----------
 let dbp=null;
 function db(){return dbp||(dbp=new Promise((ok,ng)=>{const r=indexedDB.open('kaigi-mobile',1);
