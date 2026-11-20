@@ -218,9 +218,13 @@ async function gemCall(parts,json,ms=60000){let last='';for(const md of GEM_MODE
   throw new Error('使えるモデルが見つかりません('+last+')')}
 $('#gemSave').onclick=async()=>{const k=$('#gemKey').value.trim();if(!k)return toast('キーを貼り付けてください');const old=gemKey;gemKey=k;
   $('#gemMsg').textContent='テスト中…';$('#gemSave').disabled=true;
-  try{await gemCall([{text:'「OK」とだけ返してください。'}],false,30000);try{localStorage.setItem('gemKey',k)}catch(e){}$('#gemMsg').innerHTML='<b style="color:var(--ok)">✓ 使えます。「モード」で「自動判定(Gemini)」を選んでください</b>';$('#mode').value='gem';try{localStorage.setItem('mode','gem')}catch(e){}}
-  catch(e){gemKey=old;$('#gemMsg').innerHTML='<span class="err">✗ 使えません:'+esc(e.message)+'<br>キーが正しいか、ネットワーク(会社の Wi-Fi など)を確認してください</span>'}
-  finally{$('#gemSave').disabled=false;gemUI()}};
+  let saved=true;try{localStorage.setItem('gemKey',k)}catch(e){saved=false}
+  try{await gemCall([{text:'「OK」とだけ返してください。'}],false,30000);$('#gemMsg').innerHTML='<b style="color:var(--ok)">✓ 使えます。キーはこのスマホに保存しました。モードを「自動判定(Gemini)」にしました</b>';$('#mode').value='gem';try{localStorage.setItem('mode','gem')}catch(e){}}
+  catch(e){const bad=e.status===400||e.status===401||(e.status===403&&/API key|API_KEY/i.test(e.message));
+    if(bad){gemKey=old;try{old?localStorage.setItem('gemKey',old):localStorage.removeItem('gemKey')}catch(_){}$('#gemMsg').innerHTML='<span class="err">✗ キーが正しくありません:'+esc(e.message)+'</span>'}
+    else $('#gemMsg').innerHTML='<span class="warn">キーは保存しました。ただし今のネットワークでは Gemini に接続できません(会社の Wi-Fi などで制限されている可能性)。モバイル通信に切り替えてもう一度「保存してテスト」を押してください</span>'}
+  if(!saved)$('#gemMsg').innerHTML+='<br><span class="err">このブラウザではキーを保存できません(プライベートモードでは保存されません)</span>';
+  $('#gemSave').disabled=false;gemUI()};
 $('#gemDel').onclick=()=>{if(!confirm('保存した API キーを削除しますか?'))return;gemKey='';try{localStorage.removeItem('gemKey')}catch(e){}$('#gemMsg').textContent='削除しました';gemUI()};
 gemUI();
 const GL={ja:'ja-JP',zh:'zh-TW',en:'en-US'};
