@@ -160,7 +160,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21d</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21e</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -226,18 +226,18 @@ if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対
 // ---------- Gemini 自動判定 ----------
 let gemKey='';try{gemKey=localStorage.getItem('gemKey')||''}catch(e){}
 // 字幕は速さ優先:軽量(lite)モデルを先に。404(提供終了)のモデルは次回から飛ばす
-let GEM_MODELS=['gemini-flash-lite-latest','gemini-3.8-flash-lite','gemini-flash-latest','gemini-3.8-flash'];const gemDead=new Set();let gemListed=false;
-// Google はモデルをよく入れ替えるので、このキーで今使えるモデルを Google に問い合わせて並べ直す(軽くて新しい flash-lite → flash の順)
+let GEM_MODELS=['gemini-3.8-flash','gemini-flash-latest','gemini-3.8-flash-lite','gemini-flash-lite-latest'];let gemThink=true;const gemDead=new Set();let gemListed=false;
+// Google はモデルをよく入れ替えるので、このキーで今使えるモデルを Google に問い合わせて並べ直す(精度の高い flash → 軽い flash-lite の順)
 async function gemDiscover(){if(gemListed)return;gemListed=true;try{const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',{headers:{'x-goog-api-key':gemKey}});if(!r.ok)return;const j=await r.json();
   const ok=(j.models||[]).filter(x=>(x.supportedGenerationMethods||[]).includes('generateContent')).map(x=>String(x.name).replace(/^models\//,'')).filter(n=>/^gemini-[\d.]+-flash(-lite)?$/.test(n));
-  const v=n=>parseFloat(n.split('-')[1])||0;ok.sort((a,b)=>(/lite/.test(b)-/lite/.test(a))||(v(b)-v(a)));
+  const v=n=>parseFloat(n.split('-')[1])||0;ok.sort((a,b)=>(/lite/.test(a)-/lite/.test(b))||(v(b)-v(a)));
   if(ok.length)GEM_MODELS=[...new Set([...ok.slice(0,4),...GEM_MODELS])]}catch(e){}}
 function gemUI(){$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
   if(!gemKey&&$('#mode').value==='gem')$('#mode').value='both';if(window.modeUI)modeUI()}
 async function gemCall(parts,json,ms=60000){await gemDiscover();let last='',lastSt=0;for(const md of GEM_MODELS){if(gemDead.has(md))continue;const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
   try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${md}:generateContent`,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','x-goog-api-key':gemKey},
-    body:JSON.stringify({contents:[{parts}],generationConfig:json?{responseMimeType:'application/json',temperature:0}:{temperature:0}})});
-    const j=await r.json().catch(()=>({}));if(r.status===404)gemDead.add(md);if([404,429,500,503].includes(r.status)){if(r.status!==404||!lastSt||lastSt===404){last=r.status+' '+((j.error&&j.error.message)||'');lastSt=r.status}continue}
+    body:JSON.stringify({contents:[{parts}],generationConfig:Object.assign(json?{responseMimeType:'application/json',temperature:0}:{temperature:0},gemThink?{thinkingConfig:{thinkingLevel:'minimal'}}:{})})});
+    const j=await r.json().catch(()=>({}));if(r.status===400&&gemThink&&/think/i.test(JSON.stringify(j))){gemThink=false;clearTimeout(t);return gemCall(parts,json,ms)}if(r.status===404)gemDead.add(md);if([404,429,500,503].includes(r.status)){if(r.status!==404||!lastSt||lastSt===404){last=r.status+' '+((j.error&&j.error.message)||'');lastSt=r.status}continue}
     if(!r.ok){const e=new Error((j.error&&j.error.message)||('HTTP '+r.status));e.status=r.status;throw e}
     return ((j.candidates||[])[0]?.content?.parts||[]).map(p=>p.text||'').join('')}
   catch(e){if(e.name==='AbortError'){last='応答なし';lastSt=lastSt||-1;continue}throw e}finally{clearTimeout(t)}}
@@ -278,10 +278,10 @@ function toWav(chunks,rate){let n=0;for(const c of chunks)n+=c.length;const all=
   const rms=Math.sqrt(sum/Math.max(1,len));const b=new ArrayBuffer(44+len*2),d=new DataView(b);const w=(p,t)=>{for(let i=0;i<t.length;i++)d.setUint8(p+i,t.charCodeAt(i))};
   w(0,'RIFF');d.setUint32(4,36+len*2,true);w(8,'WAVE');w(12,'fmt ');d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,1,true);d.setUint32(24,R,true);d.setUint32(28,R*2,true);d.setUint16(32,2,true);d.setUint16(34,16,true);w(36,'data');d.setUint32(40,len*2,true);
   new Int16Array(b,44).set(pcm);return {blob:new Blob([b],{type:'audio/wav'}),rms}}
-// 話の切れ目(0.6秒ほど静か)で区切る。短すぎると言語判定が不安定なので最低3.5秒、長くても12秒で区切る
+// 話の切れ目(0.6秒ほど静か)で区切る。短すぎると言語判定が不安定なので最低2.5秒、長くても8秒で区切る
 function autoCut(m){if(!actx||!abuf.length)return;const sec=abuf.length*abuf[0].length/actx.sampleRate;const per=abuf[0].length/actx.sampleRate;const k=Math.max(1,Math.round(0.6/per));
   const avg=segRms.reduce((a,b)=>a+b,0)/segRms.length;const th=Math.max(0.006,avg*0.35);const tail=segRms.slice(-k);
-  if(sec>=12||(sec>=3.5&&tail.length===k&&tail.every(v=>v<th)))flushSeg(m)}
+  if(sec>=8||(sec>=2.5&&tail.length===k&&tail.every(v=>v<th)))flushSeg(m)}
 function flushSeg(m){if(!actx||!abuf.length)return;const ch=abuf;abuf=[];segRms=[];const t0=segStart;segStart=elapsed();const {blob,rms}=toWav(ch,actx.sampleRate);
   if(rms<0.002)return;// 無音はスキップ
   if(!gemSentAt||gemOkAt>gemSentAt)gemSentAt=Date.now();if(gemSentAt&&gemOkAt<gemSentAt&&Date.now()-gemSentAt>40000&&cur===m)$('#fallBox').classList.remove('hidden');
