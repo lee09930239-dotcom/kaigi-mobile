@@ -160,7 +160,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21c</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21d</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -226,13 +226,18 @@ if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対
 // ---------- Gemini 自動判定 ----------
 let gemKey='';try{gemKey=localStorage.getItem('gemKey')||''}catch(e){}
 // 字幕は速さ優先:軽量(lite)モデルを先に。404(提供終了)のモデルは次回から飛ばす
-const GEM_MODELS=['gemini-flash-lite-latest','gemini-3.5-flash-lite','gemini-flash-latest','gemini-2.5-flash'];const gemDead=new Set();
+let GEM_MODELS=['gemini-flash-lite-latest','gemini-3.8-flash-lite','gemini-flash-latest','gemini-3.8-flash'];const gemDead=new Set();let gemListed=false;
+// Google はモデルをよく入れ替えるので、このキーで今使えるモデルを Google に問い合わせて並べ直す(軽くて新しい flash-lite → flash の順)
+async function gemDiscover(){if(gemListed)return;gemListed=true;try{const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',{headers:{'x-goog-api-key':gemKey}});if(!r.ok)return;const j=await r.json();
+  const ok=(j.models||[]).filter(x=>(x.supportedGenerationMethods||[]).includes('generateContent')).map(x=>String(x.name).replace(/^models\//,'')).filter(n=>/^gemini-[\d.]+-flash(-lite)?$/.test(n));
+  const v=n=>parseFloat(n.split('-')[1])||0;ok.sort((a,b)=>(/lite/.test(b)-/lite/.test(a))||(v(b)-v(a)));
+  if(ok.length)GEM_MODELS=[...new Set([...ok.slice(0,4),...GEM_MODELS])]}catch(e){}}
 function gemUI(){$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
   if(!gemKey&&$('#mode').value==='gem')$('#mode').value='both';if(window.modeUI)modeUI()}
-async function gemCall(parts,json,ms=60000){let last='',lastSt=0;for(const md of GEM_MODELS){if(gemDead.has(md))continue;const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
+async function gemCall(parts,json,ms=60000){await gemDiscover();let last='',lastSt=0;for(const md of GEM_MODELS){if(gemDead.has(md))continue;const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
   try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${md}:generateContent`,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','x-goog-api-key':gemKey},
     body:JSON.stringify({contents:[{parts}],generationConfig:json?{responseMimeType:'application/json',temperature:0}:{temperature:0}})});
-    const j=await r.json().catch(()=>({}));if(r.status===404)gemDead.add(md);if([404,429,500,503].includes(r.status)){last=r.status+' '+((j.error&&j.error.message)||'');lastSt=r.status;continue}
+    const j=await r.json().catch(()=>({}));if(r.status===404)gemDead.add(md);if([404,429,500,503].includes(r.status)){if(r.status!==404||!lastSt||lastSt===404){last=r.status+' '+((j.error&&j.error.message)||'');lastSt=r.status}continue}
     if(!r.ok){const e=new Error((j.error&&j.error.message)||('HTTP '+r.status));e.status=r.status;throw e}
     return ((j.candidates||[])[0]?.content?.parts||[]).map(p=>p.text||'').join('')}
   catch(e){if(e.name==='AbortError'){last='応答なし';lastSt=lastSt||-1;continue}throw e}finally{clearTimeout(t)}}
@@ -243,7 +248,7 @@ $('#gemSave').onclick=async()=>{const k=$('#gemKey').value.trim();if(!k)return t
   try{await gemCall([{text:'「OK」とだけ返してください。'}],false,30000);$('#gemMsg').innerHTML='<b style="color:var(--ok)">✓ 使えます。キーはこのスマホに保存しました。モードを「自動判定(Gemini)」にしました</b>';$('#mode').value='gem';try{localStorage.setItem('mode','gem')}catch(e){}}
   catch(e){const bad=e.status===400||e.status===401||(e.status===403&&/API key|API_KEY/i.test(e.message));
     if(bad){gemKey=old;try{old?localStorage.setItem('gemKey',old):localStorage.removeItem('gemKey')}catch(_){}$('#gemMsg').innerHTML='<span class="err">✗ キーが正しくありません:'+esc(e.message)+'</span>'}
-    else if([429,500,503].includes(e.status))$('#gemMsg').innerHTML='<span class="warn">キーは保存しました。'+esc(e.message)+'</span>';
+    else if([404,429,500,503].includes(e.status))$('#gemMsg').innerHTML='<span class="warn">キーは保存しました。'+esc(e.message)+'</span>';
     else $('#gemMsg').innerHTML='<span class="warn">キーは保存しました。ただし今のネットワークでは Gemini に接続できません(会社の Wi-Fi などで制限されている可能性)。モバイル通信に切り替えてもう一度「保存してテスト」を押してください</span>'}
   if(!saved)$('#gemMsg').innerHTML+='<br><span class="err">このブラウザではキーを保存できません(プライベートモードでは保存されません)</span>';
   $('#gemSave').disabled=false;gemUI()};
@@ -325,7 +330,7 @@ function startSR(){if(!SR||!cur)return;itStart=0;const r=new SR();rec=r;r.lang=l
 async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':$('#mode').value;
   if(mode==='gem'){$('#startBtn').disabled=true;$('#startBtn').textContent='Gemini に接続確認中…';
     try{await gemCall([{text:'「OK」とだけ返してください。'}],false,8000)}
-    catch(e){const ok=confirm('Gemini を使えません:'+e.message+(e.status===503||e.status===500||e.status===429?'':'\n会社の Wi-Fi などで制限されている可能性があります。')+'\n\n「OK」:通常モード(録音＋字幕・言語は手動切り替え)で始める\n「キャンセル」:始めない(モバイル通信に切り替えてからもう一度)');
+    catch(e){const ok=confirm('Gemini を使えません:'+e.message+(e.status===503||e.status===500||e.status===429||e.status===404?'':'\n会社の Wi-Fi などで制限されている可能性があります。')+'\n\n「OK」:通常モード(録音＋字幕・言語は手動切り替え)で始める\n「キャンセル」:始めない(モバイル通信に切り替えてからもう一度)');
       if(!ok){$('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める';return}mode='both';toast('通常モードで始めます')}
     $('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める'}const isGem=mode==='gem';const useRec=mode!=='cap',useCap=!isGem&&mode!=='rec'&&!!SR;
   if(!useRec&&!useCap){toast('このブラウザでは字幕が使えません。「録音」モードを選んでください');return}
