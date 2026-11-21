@@ -160,7 +160,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21e</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21f</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -260,7 +260,8 @@ function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'
   const ctx=gemCtx.length?`\n- 直前の字幕(参考。言語判定と文脈に使う):${gemCtx.map(c=>`[${c.lang}]${c.text}`).join(' / ')}`:'';
   return `この音声は会議の一部(数秒)です。話されている内容を正確に文字起こししてください。
 - 話者の言語は日本語・中国語(台湾華語)・英語のどれか。中国語の会話を日本語や英語として書かないこと。音から判断が難しいときは直前と同じ言語にする
-- 短い断片や雑音を英語の文にしないこと${ctx}
+- 短い断片や雑音を英語の文にしないこと
+- 遠くのテレビ・BGM・放送など、会議の参加者ではない背景の音声は書かない${ctx}
 出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま","tr":"訳"}]
 - 中国語は text も tr も必ず台湾の繁體字で書く(简体字は使わない)
 - 発言の区切りごとに1要素
@@ -283,7 +284,7 @@ function autoCut(m){if(!actx||!abuf.length)return;const sec=abuf.length*abuf[0].
   const avg=segRms.reduce((a,b)=>a+b,0)/segRms.length;const th=Math.max(0.006,avg*0.35);const tail=segRms.slice(-k);
   if(sec>=8||(sec>=2.5&&tail.length===k&&tail.every(v=>v<th)))flushSeg(m)}
 function flushSeg(m){if(!actx||!abuf.length)return;const ch=abuf;abuf=[];segRms=[];const t0=segStart;segStart=elapsed();const {blob,rms}=toWav(ch,actx.sampleRate);
-  if(rms<0.002)return;// 無音はスキップ
+  if(rms<0.004)return;// 無音はスキップ
   if(!gemSentAt||gemOkAt>gemSentAt)gemSentAt=Date.now();if(gemSentAt&&gemOkAt<gemSentAt&&Date.now()-gemSentAt>40000&&cur===m)$('#fallBox').classList.remove('hidden');
   gemIn++;const pr=gemFetch(blob).finally(()=>gemIn--);if(gemIn>3&&cur===m&&!lastErr)warn('Gemini の応答が遅れています。字幕が少し遅れて出ます');
   if(interimEl&&cur===m)interimEl.textContent='(Gemini が字幕を作成中…)';gemQ=gemQ.then(()=>pr.then(res=>gemRender(m,res,t0)))}
@@ -335,7 +336,7 @@ async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':
     $('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める'}const isGem=mode==='gem';const useRec=mode!=='cap',useCap=!isGem&&mode!=='rec'&&!!SR;
   if(!useRec&&!useCap){toast('このブラウザでは字幕が使えません。「録音」モードを選んでください');return}
   const now=Date.now();cur={id:now,start:now,name:$('#newName').value.trim()||`${new Date(now).toLocaleDateString('ja-JP')} 会議`,notes:'',summary:'',lines:[],langs:[{t:0,lang}],mode,gem:isGem,duration:0,status:'recording',audio:null,mime:'',useCap};
-  if(useRec){try{stream=await navigator.mediaDevices.getUserMedia({audio:isGem?{echoCancellation:false,noiseSuppression:false,autoGainControl:true}:true})}catch(e){toast('マイクを使えません:'+e.message);cur=null;return}
+  if(useRec){try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch(e){toast('マイクを使えません:'+e.message);cur=null;return}
     const mime=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
     try{mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream)}catch(e){toast('この端末では録音できません:'+e.message);stream.getTracks().forEach(t=>t.stop());cur=null;return}
     cur.mime=mr.mimeType||mime;seq=0;const mid=cur.id;
