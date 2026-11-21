@@ -160,7 +160,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21b</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -250,27 +250,34 @@ $('#gemSave').onclick=async()=>{const k=$('#gemKey').value.trim();if(!k)return t
 $('#gemDel').onclick=()=>{if(!confirm('保存した API キーを削除しますか?'))return;gemKey='';try{localStorage.removeItem('gemKey')}catch(e){}$('#gemMsg').textContent='削除しました';gemUI()};
 gemUI();modeUI();
 const GL={ja:'ja-JP',zh:'zh-TW',en:'en-US'};
-let segT=null,gemQ=Promise.resolve(),gemFail=0,gemIn=0;
+let gemCtx=[],segRms=[],segT=null,gemQ=Promise.resolve(),gemFail=0,gemIn=0;
 function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'?'tr:lang が ja なら繁體中文訳、zh または en なら日本語訳':tgt==='ja'?'tr:日本語訳(lang が ja なら空文字)':'tr:繁體中文訳(lang が zh なら空文字)';
+  const ctx=gemCtx.length?`\n- 直前の字幕(参考。言語判定と文脈に使う):${gemCtx.map(c=>`[${c.lang}]${c.text}`).join(' / ')}`:'';
   return `この音声は会議の一部(数秒)です。話されている内容を正確に文字起こししてください。
+- 話者の言語は日本語・中国語(台湾華語)・英語のどれか。中国語の会話を日本語や英語として書かないこと。音から判断が難しいときは直前と同じ言語にする
+- 短い断片や雑音を英語の文にしないこと${ctx}
 出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま","tr":"訳"}]
 - 中国語は text も tr も必ず台湾の繁體字で書く(简体字は使わない)
 - 発言の区切りごとに1要素
 - ${rule}
 - 発言がない・雑音だけ・聞き取れない場合は [] を返す。推測で文章を作らないこと`}
 function b64(blob){return new Promise((ok,ng)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ng(r.error);r.readAsDataURL(blob)})}
-// 生の音声(PCM)を集めて 8 秒ごとに 16kHz WAV にして送る(iPhone の m4a は Gemini が読めないことがあるため)
+// 生の音声(PCM)を集めて話の切れ目ごとに 16kHz WAV にして送る(iPhone の m4a は Gemini が読めないことがあるため)
 let actx=null,aproc=null,abuf=[],segStart=0,lastErr='',gemOkAt=0,gemSentAt=0;
 function startPCM(m){try{actx=new (window.AudioContext||window.webkitAudioContext)();const src=actx.createMediaStreamSource(stream);aproc=actx.createScriptProcessor(4096,1,1);
-  aproc.onaudioprocess=e=>{abuf.push(new Float32Array(e.inputBuffer.getChannelData(0)))};src.connect(aproc);aproc.connect(actx.destination);actx.resume();
-  abuf=[];segStart=elapsed();segT=setInterval(()=>flushSeg(m),6000)}catch(e){warn('自動判定を開始できません:'+e.message)}}
+  aproc.onaudioprocess=e=>{const c=new Float32Array(e.inputBuffer.getChannelData(0));let q=0;for(let i=0;i<c.length;i+=4)q+=c[i]*c[i];abuf.push(c);segRms.push(Math.sqrt(q/(c.length/4)))};src.connect(aproc);aproc.connect(actx.destination);actx.resume();
+  abuf=[];segRms=[];gemCtx=[];segStart=elapsed();segT=setInterval(()=>autoCut(m),300)}catch(e){warn('自動判定を開始できません:'+e.message)}}
 function toWav(chunks,rate){let n=0;for(const c of chunks)n+=c.length;const all=new Float32Array(n);let o=0;for(const c of chunks){all.set(c,o);o+=c.length}
   const R=16000,ratio=rate/R,len=Math.floor(n/ratio);const pcm=new Int16Array(len);let sum=0;
   for(let i=0;i<len;i++){const v=Math.max(-1,Math.min(1,all[Math.floor(i*ratio)]));sum+=v*v;pcm[i]=v<0?v*32768:v*32767}
   const rms=Math.sqrt(sum/Math.max(1,len));const b=new ArrayBuffer(44+len*2),d=new DataView(b);const w=(p,t)=>{for(let i=0;i<t.length;i++)d.setUint8(p+i,t.charCodeAt(i))};
   w(0,'RIFF');d.setUint32(4,36+len*2,true);w(8,'WAVE');w(12,'fmt ');d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,1,true);d.setUint32(24,R,true);d.setUint32(28,R*2,true);d.setUint16(32,2,true);d.setUint16(34,16,true);w(36,'data');d.setUint32(40,len*2,true);
   new Int16Array(b,44).set(pcm);return {blob:new Blob([b],{type:'audio/wav'}),rms}}
-function flushSeg(m){if(!actx||!abuf.length)return;const ch=abuf;abuf=[];const t0=segStart;segStart=elapsed();const {blob,rms}=toWav(ch,actx.sampleRate);
+// 話の切れ目(0.6秒ほど静か)で区切る。短すぎると言語判定が不安定なので最低3.5秒、長くても12秒で区切る
+function autoCut(m){if(!actx||!abuf.length)return;const sec=abuf.length*abuf[0].length/actx.sampleRate;const per=abuf[0].length/actx.sampleRate;const k=Math.max(1,Math.round(0.6/per));
+  const avg=segRms.reduce((a,b)=>a+b,0)/segRms.length;const th=Math.max(0.006,avg*0.35);const tail=segRms.slice(-k);
+  if(sec>=12||(sec>=3.5&&tail.length===k&&tail.every(v=>v<th)))flushSeg(m)}
+function flushSeg(m){if(!actx||!abuf.length)return;const ch=abuf;abuf=[];segRms=[];const t0=segStart;segStart=elapsed();const {blob,rms}=toWav(ch,actx.sampleRate);
   if(rms<0.004)return;// 無音はスキップ
   if(!gemSentAt||gemOkAt>gemSentAt)gemSentAt=Date.now();if(gemSentAt&&gemOkAt<gemSentAt&&Date.now()-gemSentAt>40000&&cur===m)$('#fallBox').classList.remove('hidden');
   gemIn++;const pr=gemFetch(blob).finally(()=>gemIn--);if(gemIn>3&&cur===m&&!lastErr)warn('Gemini の応答が遅れています。字幕が少し遅れて出ます');
@@ -283,7 +290,7 @@ function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;lastErr=e.mes
    if(e.status===429)warn('Gemini の無料の上限に達しました。録音は続いています。次の会議は通常モードで使ってください');
    else if(e.status===400||e.status===403)warn('Gemini の API キーが使えません(詳細設定を確認)。録音は続いています');
    else warn('Gemini:'+e.message+'。録音は続いています')}return}
-  gemFail=0;gemOkAt=Date.now();$('#fallBox').classList.add('hidden');if(lastErr){lastErr='';$('#liveWarn').classList.add('hidden')}for(const it of res.arr)if(it&&it.text&&String(it.text).trim())addLine(String(it.text),{m,t:t0,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});
+  gemFail=0;gemOkAt=Date.now();$('#fallBox').classList.add('hidden');if(lastErr){lastErr='';$('#liveWarn').classList.add('hidden')}for(const it of res.arr)if(it&&it.text&&String(it.text).trim()){gemCtx.push({lang:it.lang,text:String(it.text).slice(0,60)});gemCtx=gemCtx.slice(-2);}for(const it of res.arr)if(it&&it.text&&String(it.text).trim())addLine(String(it.text),{m,t:t0,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});
   if(interimEl&&cur===m)interimEl.textContent=gemIn?'(Gemini が字幕を作成中…)':''}
 
 // ---------- 一覧 ----------
