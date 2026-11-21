@@ -98,7 +98,7 @@ h2{font-size:16px;margin:0 0 8px}
       2. 「API キーを作成」を押して、表示されたキーをコピー<br>
       3. 下の欄に貼り付けて「保存してテスト」→「✓ 使えます」と出れば完了<br>
       4. 会議を始める前に「モード」で「自動判定(Gemini)」を選ぶ</p>
-    <p class="note"><b>注意</b><br>・字幕は約 8 秒ごとにまとめて出ます(リアルタイムより少し遅れます)<br>・無料の回数に上限があります。上限になったら通常モードに戻してください<br>・会社の Wi-Fi などで Gemini が使えないことがあります。そのときはモバイル通信で<br>・キーは他の人に教えないでください(このスマホの中だけに保存されます)</p>
+    <p class="note"><b>注意</b><br>・字幕は約 6 秒ごとにまとめて出ます(リアルタイムより少し遅れます)<br>・無料の回数に上限があります。上限になったら通常モードに戻してください<br>・会社の Wi-Fi などで Gemini が使えないことがあります。そのときはモバイル通信で<br>・キーは他の人に教えないでください(このスマホの中だけに保存されます)</p>
     <input id="gemKey" type="password" placeholder="API キーを貼り付け" autocomplete="off">
     <div class="row" style="margin-top:8px"><button id="gemSave">保存してテスト</button><button id="gemDel" class="danger">キーを削除</button></div>
     <p id="gemMsg" class="note"></p>
@@ -160,7 +160,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-20j</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -225,13 +225,14 @@ if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対
 
 // ---------- Gemini 自動判定 ----------
 let gemKey='';try{gemKey=localStorage.getItem('gemKey')||''}catch(e){}
-const GEM_MODELS=['gemini-flash-latest','gemini-2.5-flash','gemini-flash-lite-latest','gemini-2.5-flash-lite'];
+// 字幕は速さ優先:軽量(lite)モデルを先に。404(提供終了)のモデルは次回から飛ばす
+const GEM_MODELS=['gemini-flash-lite-latest','gemini-3.5-flash-lite','gemini-flash-latest','gemini-2.5-flash'];const gemDead=new Set();
 function gemUI(){$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
   if(!gemKey&&$('#mode').value==='gem')$('#mode').value='both';if(window.modeUI)modeUI()}
-async function gemCall(parts,json,ms=60000){let last='',lastSt=0;for(const md of GEM_MODELS){const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
+async function gemCall(parts,json,ms=60000){let last='',lastSt=0;for(const md of GEM_MODELS){if(gemDead.has(md))continue;const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
   try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${md}:generateContent`,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','x-goog-api-key':gemKey},
     body:JSON.stringify({contents:[{parts}],generationConfig:json?{responseMimeType:'application/json',temperature:0}:{temperature:0}})});
-    const j=await r.json().catch(()=>({}));if([404,429,500,503].includes(r.status)){last=r.status+' '+((j.error&&j.error.message)||'');lastSt=r.status;continue}
+    const j=await r.json().catch(()=>({}));if(r.status===404)gemDead.add(md);if([404,429,500,503].includes(r.status)){last=r.status+' '+((j.error&&j.error.message)||'');lastSt=r.status;continue}
     if(!r.ok){const e=new Error((j.error&&j.error.message)||('HTTP '+r.status));e.status=r.status;throw e}
     return ((j.candidates||[])[0]?.content?.parts||[]).map(p=>p.text||'').join('')}
   catch(e){if(e.name==='AbortError'){last='応答なし';lastSt=lastSt||-1;continue}throw e}finally{clearTimeout(t)}}
@@ -251,8 +252,9 @@ gemUI();modeUI();
 const GL={ja:'ja-JP',zh:'zh-TW',en:'en-US'};
 let segT=null,gemQ=Promise.resolve(),gemFail=0,gemIn=0;
 function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'?'tr:lang が ja なら繁體中文訳、zh または en なら日本語訳':tgt==='ja'?'tr:日本語訳(lang が ja なら空文字)':'tr:繁體中文訳(lang が zh なら空文字)';
-  return `この音声は会議の一部(約8秒)です。話されている内容を正確に文字起こししてください。
-出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま(中国語は繁體字)","tr":"訳"}]
+  return `この音声は会議の一部(数秒)です。話されている内容を正確に文字起こししてください。
+出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま","tr":"訳"}]
+- 中国語は text も tr も必ず台湾の繁體字で書く(简体字は使わない)
 - 発言の区切りごとに1要素
 - ${rule}
 - 発言がない・雑音だけ・聞き取れない場合は [] を返す。推測で文章を作らないこと`}
@@ -261,7 +263,7 @@ function b64(blob){return new Promise((ok,ng)=>{const r=new FileReader();r.onloa
 let actx=null,aproc=null,abuf=[],segStart=0,lastErr='',gemOkAt=0,gemSentAt=0;
 function startPCM(m){try{actx=new (window.AudioContext||window.webkitAudioContext)();const src=actx.createMediaStreamSource(stream);aproc=actx.createScriptProcessor(4096,1,1);
   aproc.onaudioprocess=e=>{abuf.push(new Float32Array(e.inputBuffer.getChannelData(0)))};src.connect(aproc);aproc.connect(actx.destination);actx.resume();
-  abuf=[];segStart=elapsed();segT=setInterval(()=>flushSeg(m),8000)}catch(e){warn('自動判定を開始できません:'+e.message)}}
+  abuf=[];segStart=elapsed();segT=setInterval(()=>flushSeg(m),6000)}catch(e){warn('自動判定を開始できません:'+e.message)}}
 function toWav(chunks,rate){let n=0;for(const c of chunks)n+=c.length;const all=new Float32Array(n);let o=0;for(const c of chunks){all.set(c,o);o+=c.length}
   const R=16000,ratio=rate/R,len=Math.floor(n/ratio);const pcm=new Int16Array(len);let sum=0;
   for(let i=0;i<len;i++){const v=Math.max(-1,Math.min(1,all[Math.floor(i*ratio)]));sum+=v*v;pcm[i]=v<0?v*32768:v*32767}
@@ -331,7 +333,7 @@ async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':
   $('#caps').innerHTML='';interimEl=document.createElement('div');interimEl.className='ln int';$('#caps').appendChild(interimEl);
   $('#liveNotes').value='';$('#liveWarn').classList.add('hidden');
   $('#liveMode').textContent={both:'録音中・字幕あり',cap:'字幕のみ(録音なし)',rec:'録音のみ(字幕なし)',gem:'録音中・自動判定(Gemini)'}[mode];$('#langSeg2').classList.toggle('hidden',isGem);$('#tgtSeg2').classList.toggle('hidden',isGem);
-  if(isGem)interimEl.textContent='(言語は自動判定。約 8 秒ごとに字幕が出ます)';
+  if(isGem)interimEl.textContent='(言語は自動判定。約 6 秒ごとに字幕が出ます)';
   if(!useCap&&!isGem)interimEl.textContent='(字幕なしモード。録音は続いています)';
   setLangUI();show('live');keepAwake();if(useCap)startSR();
   clearInterval(srWatch);if(useCap)srWatch=setInterval(()=>{if(!cur||!rec)return;const t=interimEl.textContent;if(itStart&&(Date.now()-itStart>10000||t.length>90))forceCommit()},1000);
