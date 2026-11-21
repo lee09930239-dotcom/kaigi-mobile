@@ -160,7 +160,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21f</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21g</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -257,14 +257,14 @@ gemUI();modeUI();
 const GL={ja:'ja-JP',zh:'zh-TW',en:'en-US'};
 let gemCtx=[],segRms=[],segT=null,gemQ=Promise.resolve(),gemFail=0,gemIn=0;
 function gemPrompt(){const rule=tgt==='off'?'tr は常に空文字':tgt==='auto'?'tr:lang が ja なら繁體中文訳、zh または en なら日本語訳':tgt==='ja'?'tr:日本語訳(lang が ja なら空文字)':'tr:繁體中文訳(lang が zh なら空文字)';
-  const ctx=gemCtx.length?`\n- 直前の字幕(参考。言語判定と文脈に使う):${gemCtx.map(c=>`[${c.lang}]${c.text}`).join(' / ')}`:'';
+  const ctx=gemCtx.length?`\n- 直前の発言の言語:${gemCtx[gemCtx.length-1].lang}(判断に迷ったときだけ参考にする)`:'';
   return `この音声は会議の一部(数秒)です。話されている内容を正確に文字起こししてください。
 - 話者の言語は日本語・中国語(台湾華語)・英語のどれか。中国語の会話を日本語や英語として書かないこと。音から判断が難しいときは直前と同じ言語にする
 - 短い断片や雑音を英語の文にしないこと
 - 遠くのテレビ・BGM・放送など、会議の参加者ではない背景の音声は書かない${ctx}
 出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま","tr":"訳"}]
 - 中国語は text も tr も必ず台湾の繁體字で書く(简体字は使わない)
-- 発言の区切りごとに1要素
+- 発言の区切りごとに1要素。同じ言葉を繰り返して書かない
 - ${rule}
 - 発言がない・雑音だけ・聞き取れない場合は [] を返す。推測で文章を作らないこと`}
 function b64(blob){return new Promise((ok,ng)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ng(r.error);r.readAsDataURL(blob)})}
@@ -296,7 +296,9 @@ function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;lastErr=e.mes
    if(e.status===429)warn('Gemini の無料の上限に達しました。録音は続いています。次の会議は通常モードで使ってください');
    else if(e.status===400||e.status===403)warn('Gemini の API キーが使えません(詳細設定を確認)。録音は続いています');
    else warn('Gemini:'+e.message+'。録音は続いています')}return}
-  gemFail=0;gemOkAt=Date.now();$('#fallBox').classList.add('hidden');if(lastErr){lastErr='';$('#liveWarn').classList.add('hidden')}for(const it of res.arr)if(it&&it.text&&String(it.text).trim()){gemCtx.push({lang:it.lang,text:String(it.text).slice(0,60)});gemCtx=gemCtx.slice(-2);}for(const it of res.arr)if(it&&it.text&&String(it.text).trim())addLine(String(it.text),{m,t:t0,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});
+  gemFail=0;gemOkAt=Date.now();$('#fallBox').classList.add('hidden');if(lastErr){lastErr='';$('#liveWarn').classList.add('hidden')}for(const it of res.arr)if(it&&it.text&&String(it.text).trim()){gemCtx.push({lang:it.lang,text:String(it.text).slice(0,60)});gemCtx=gemCtx.slice(-2);}const norm=x=>String(x||'').replace(/[\s、。,.!?！？「」…ー〜~]/g,'');const recent=(m.lines||[]).slice(-6).map(l=>norm(l.text));const seenNow=[];
+  res.arr=res.arr.filter(it=>{const n=norm(it&&it.text);if(!n)return false;const dup=[...recent,...seenNow].some(r=>r&&(r===n||(n.length>=4&&r.includes(n))||(r.length>=4&&n.includes(r)&&n.length-r.length<4)));seenNow.push(n);return !dup});
+  for(const it of res.arr)if(it&&it.text&&String(it.text).trim())addLine(String(it.text),{m,t:t0,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});
   if(interimEl&&cur===m)interimEl.textContent=gemIn?'(Gemini が字幕を作成中…)':''}
 
 // ---------- 一覧 ----------
