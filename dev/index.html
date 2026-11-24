@@ -230,7 +230,7 @@ if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対
 
 // ---------- Gemini 自動判定 ----------
 // Gemini はサーバー経由(キーはサーバーだけにある)。gemKey にはアクセスコードが入る
-const GEM_PROXY='';
+const GEM_PROXY='https://script.google.com/macros/s/AKfycbzR236ZiZqR4O8ijsN_LzMGZySw21sG3leOo9XTCe5no723caMBbi6Ebsybrrdv4N0D/exec';
 let gemKey='';try{gemKey=LS.getItem('gemCode')||''}catch(e){}
 try{const u=new URL(location.href),c=u.searchParams.get('c');if(c){gemKey=c.trim();LS.setItem('gemCode',gemKey);u.searchParams.delete('c');history.replaceState(null,'',u.pathname+u.search)}}catch(e){}
 async function gp(op,model,body,signal){const r=await fetch(GEM_PROXY,{method:'POST',signal,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({c:gemKey,op,model,body})});
