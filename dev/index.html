@@ -94,16 +94,12 @@ h2{font-size:16px;margin:0 0 8px}
   </div>
   <details class="card" id="gemSet" style="padding:10px 14px">
     <summary class="note">⚙ 詳細設定:言語の自動判定(Gemini)<span id="gemBadge"></span></summary>
-    <p class="note">日本語・中国語・英語を自動で判定して、翻訳付きの字幕を出すモードです。Google の Gemini(無料)を使います。</p>
-    <p class="note"><b>はじめの設定(1回だけ)</b><br>
-      1. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> を開き、Google アカウントでログイン<br>
-      2. 「API キーを作成」を押して、表示されたキーをコピー<br>
-      3. 下の欄に貼り付けて「保存してテスト」→「✓ 使えます」と出れば完了<br>
-      4. 会議を始める前に「モード」で「自動判定(Gemini)」を選ぶ</p>
-    <p class="note"><b>注意</b><br>・字幕は約 6 秒ごとにまとめて出ます(リアルタイムより少し遅れます)<br>・無料の回数に上限があります。上限になったら通常モードに戻してください<br>・会社の Wi-Fi などで Gemini が使えないことがあります。そのときはモバイル通信で<br>・キーは他の人に教えないでください(このスマホの中だけに保存されます)</p>
-    <p class="warn">⚠ 無料のキーでは、送った音声・文字が Google のサービス改善(AI の学習)に使われることがあります。お客様との会議で使う場合は、Google Cloud で支払い設定をした(有料の)キーを使ってください。音声は海外(Google)のサーバーに送られます。</p>
-    <input id="gemKey" type="password" placeholder="API キーを貼り付け" autocomplete="off">
-    <div class="row" style="margin-top:8px"><button id="gemSave">保存してテスト</button><button id="gemDel" class="danger">キーを削除</button></div>
+    <p class="note">日本語・中国語・英語を自動で判定して、翻訳付きの字幕を出すモードです。Google の Gemini を使います。API キーの準備は不要です。</p>
+    <p class="note"><b>使い方</b><br>1. 共有されたリンクから開くと、アクセスコードが自動で入ります(または下の欄に入力して「保存してテスト」)<br>2. 会議を始める前に「モード」で「自動判定(Gemini)」を選ぶ</p>
+    <p class="note"><b>注意</b><br>・字幕は数秒ごとにまとめて出ます(リアルタイムより少し遅れます)<br>・1 日に使える回数に上限があります。上限になったら通常モードに戻してください<br>・会社の Wi-Fi などで使えないことがあります。そのときはモバイル通信で</p>
+    <p class="warn">⚠ 現在は Gemini の無料枠を使っているため、送った音声・文字が Google のサービス改善(AI の学習)に使われることがあります。社外秘の会議では通常モードをお使いください。音声は海外(Google)のサーバーに送られます。</p>
+    <input id="gemKey" placeholder="アクセスコード" autocomplete="off" autocapitalize="off">
+    <div class="row" style="margin-top:8px"><button id="gemSave">保存してテスト</button><button id="gemDel" class="danger">コードを削除</button></div>
     <p id="gemMsg" class="note"></p>
   </details>
   <div class="card">
@@ -166,7 +162,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-23a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-24a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -233,35 +229,39 @@ $('#mode').onchange=()=>{try{LS.setItem('mode',$('#mode').value)}catch(e){}modeU
 if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対応していません。Android は Chrome、iPhone は Safari で開いてください。録音だけは使えます。';$('#srErr').classList.remove('hidden')}
 
 // ---------- Gemini 自動判定 ----------
-let gemKey='';try{gemKey=LS.getItem('gemKey')||''}catch(e){}
+// Gemini はサーバー経由(キーはサーバーだけにある)。gemKey にはアクセスコードが入る
+const GEM_PROXY='';
+let gemKey='';try{gemKey=LS.getItem('gemCode')||''}catch(e){}
+try{const u=new URL(location.href),c=u.searchParams.get('c');if(c){gemKey=c.trim();LS.setItem('gemCode',gemKey);u.searchParams.delete('c');history.replaceState(null,'',u.pathname+u.search)}}catch(e){}
+async function gp(op,model,body,signal){const r=await fetch(GEM_PROXY,{method:'POST',signal,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({c:gemKey,op,model,body})});
+  const o=await r.json();const st=+o.status||500;return {status:st,ok:st>=200&&st<300,json:async()=>o.data||{}}}
 // 字幕は速さ優先:軽量(lite)モデルを先に。404(提供終了)のモデルは次回から飛ばす
 let GEM_MODELS=['gemini-3.8-flash','gemini-flash-latest','gemini-3.8-flash-lite','gemini-flash-lite-latest'];let gemThink=true;const gemDead=new Set();let gemListed=false;
 // Google はモデルをよく入れ替えるので、このキーで今使えるモデルを Google に問い合わせて並べ直す(精度の高い flash → 軽い flash-lite の順)
-async function gemDiscover(){if(gemListed)return;gemListed=true;try{const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',{headers:{'x-goog-api-key':gemKey}});if(!r.ok)return;const j=await r.json();
+async function gemDiscover(){if(gemListed)return;gemListed=true;try{const r=await gp('models');if(!r.ok)return;const j=await r.json();
   const ok=(j.models||[]).filter(x=>(x.supportedGenerationMethods||[]).includes('generateContent')).map(x=>String(x.name).replace(/^models\//,'')).filter(n=>/^gemini-[\d.]+-flash(-lite)?$/.test(n));
   const v=n=>parseFloat(n.split('-')[1])||0;ok.sort((a,b)=>(/lite/.test(a)-/lite/.test(b))||(v(b)-v(a)));
   if(ok.length)GEM_MODELS=[...new Set([...ok.slice(0,4),...GEM_MODELS])]}catch(e){}}
-function gemUI(){$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
+function gemUI(){if(!GEM_PROXY){$('#gemSet').hidden=true;gemKey=''}$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
   if(!gemKey&&$('#mode').value==='gem')$('#mode').value='both';if(window.modeUI)modeUI()}
 async function gemCall(parts,json,ms=60000){await gemDiscover();let last='',lastSt=0;for(const md of GEM_MODELS){if(gemDead.has(md))continue;const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
-  try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${md}:generateContent`,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','x-goog-api-key':gemKey},
-    body:JSON.stringify({contents:[{parts}],generationConfig:Object.assign(json?{responseMimeType:'application/json',temperature:0}:{temperature:0},gemThink?{thinkingConfig:{thinkingLevel:'minimal'}}:{})})});
+  try{const r=await gp('gen',md,{contents:[{parts}],generationConfig:Object.assign(json?{responseMimeType:'application/json',temperature:0}:{temperature:0},gemThink?{thinkingConfig:{thinkingLevel:'minimal'}}:{})},ac.signal);
     const j=await r.json().catch(()=>({}));if(r.status===400&&gemThink&&/think/i.test(JSON.stringify(j))){gemThink=false;clearTimeout(t);return gemCall(parts,json,ms)}if(r.status===404)gemDead.add(md);if([404,429,500,503].includes(r.status)){if(r.status!==404||!lastSt||lastSt===404){last=r.status+' '+((j.error&&j.error.message)||'');lastSt=r.status}continue}
     if(!r.ok){const e=new Error((j.error&&j.error.message)||('HTTP '+r.status));e.status=r.status;throw e}
     return ((j.candidates||[])[0]?.content?.parts||[]).map(p=>p.text||'').join('')}
   catch(e){if(e.name==='AbortError'){last='応答なし';lastSt=lastSt||-1;continue}throw e}finally{clearTimeout(t)}}
-  const e=new Error(lastSt===503||lastSt===500?'Gemini が混雑しています。少し待ってからお試しください':lastSt===429?'Gemini の無料の上限に達しました':lastSt===-1?'Gemini から応答がありません(混雑またはネットワーク)':'使えるモデルが見つかりません('+last+')');e.status=lastSt;throw e}
-$('#gemSave').onclick=async()=>{const k=$('#gemKey').value.trim();if(!k)return toast('キーを貼り付けてください');const old=gemKey;gemKey=k;
+  const e=new Error(lastSt===503||lastSt===500?'Gemini が混雑しています。少し待ってからお試しください':lastSt===429?'Gemini が混み合っています(無料枠の上限)。少し待つか通常モードをお使いください':lastSt===-1?'Gemini から応答がありません(混雑またはネットワーク)':'使えるモデルが見つかりません('+last+')');e.status=lastSt;throw e}
+$('#gemSave').onclick=async()=>{const k=$('#gemKey').value.trim();if(!k)return toast('アクセスコードを入力してください');const old=gemKey;gemKey=k;
   $('#gemMsg').textContent='テスト中…';$('#gemSave').disabled=true;
-  let saved=true;try{LS.setItem('gemKey',k)}catch(e){saved=false}
-  try{await gemCall([{text:'「OK」とだけ返してください。'}],false,30000);$('#gemMsg').innerHTML='<b style="color:var(--ok)">✓ 使えます。キーはこのスマホに保存しました。モードを「自動判定(Gemini)」にしました</b>';$('#mode').value='gem';try{LS.setItem('mode','gem')}catch(e){}}
-  catch(e){const bad=e.status===400||e.status===401||(e.status===403&&/API key|API_KEY/i.test(e.message));
-    if(bad){gemKey=old;try{old?LS.setItem('gemKey',old):LS.removeItem('gemKey')}catch(_){}$('#gemMsg').innerHTML='<span class="err">✗ キーが正しくありません:'+esc(e.message)+'</span>'}
-    else if([404,429,500,503].includes(e.status))$('#gemMsg').innerHTML='<span class="warn">キーは保存しました。'+esc(e.message)+'</span>';
-    else $('#gemMsg').innerHTML='<span class="warn">キーは保存しました。ただし今のネットワークでは Gemini に接続できません(会社の Wi-Fi などで制限されている可能性)。モバイル通信に切り替えてもう一度「保存してテスト」を押してください</span>'}
-  if(!saved)$('#gemMsg').innerHTML+='<br><span class="err">このブラウザではキーを保存できません(プライベートモードでは保存されません)</span>';
+  let saved=true;try{LS.setItem('gemCode',k)}catch(e){saved=false}
+  try{await gemCall([{text:'「OK」とだけ返してください。'}],false,30000);$('#gemMsg').innerHTML='<b style="color:var(--ok)">✓ 使えます。コードはこのスマホに保存しました。モードを「自動判定(Gemini)」にしました</b>';$('#mode').value='gem';try{LS.setItem('mode','gem')}catch(e){}}
+  catch(e){const bad=e.status===401;
+    if(bad){gemKey=old;try{old?LS.setItem('gemCode',old):LS.removeItem('gemCode')}catch(_){}$('#gemMsg').innerHTML='<span class="err">✗ '+esc(e.message)+'</span>'}
+    else if([404,429,500,503].includes(e.status))$('#gemMsg').innerHTML='<span class="warn">コードは保存しました。'+esc(e.message)+'</span>';
+    else $('#gemMsg').innerHTML='<span class="warn">コードは保存しました。ただし今のネットワークでは Gemini に接続できません(会社の Wi-Fi などで制限されている可能性)。モバイル通信に切り替えてもう一度「保存してテスト」を押してください</span>'}
+  if(!saved)$('#gemMsg').innerHTML+='<br><span class="err">このブラウザではコードを保存できません(プライベートモードでは保存されません)</span>';
   $('#gemSave').disabled=false;gemUI()};
-$('#gemDel').onclick=()=>{if(!confirm('保存した API キーを削除しますか?'))return;gemKey='';try{LS.removeItem('gemKey')}catch(e){}$('#gemMsg').textContent='削除しました';gemUI()};
+$('#gemDel').onclick=()=>{if(!confirm('保存したアクセスコードを削除しますか?'))return;gemKey='';try{LS.removeItem('gemCode')}catch(e){}$('#gemMsg').textContent='削除しました';gemUI()};
 gemUI();modeUI();
 const GL={ja:'ja-JP',zh:'zh-TW',en:'en-US'};
 let gemCtx=[],segRms=[],segT=null,gemQ=Promise.resolve(),gemFail=0,gemIn=0;
