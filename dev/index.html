@@ -90,7 +90,7 @@ h2{font-size:16px;margin:0 0 8px}
     <input id="newName" placeholder="例:〇〇社 打ち合わせ">
     <div style="margin-top:12px"><button id="startBtn" class="primary big">● 会議を始める</button></div>
     <p class="err hidden" id="srErr"></p>
-    <p class="note">⚠ 会議中は画面を開いたままにしてください。画面を消したり別のアプリに切り替えると、録音・字幕が止まることがあります。インターネット接続が必要です。</p>
+    <p class="note">⚠ 画面を消すと、その間の字幕は止まります。会議を終えたあと、録音から自動で字幕を作ります。インターネット接続が必要です。</p>
   </div>
   <details class="card" id="gemSet" style="padding:10px 14px" hidden>
     <summary class="note">⚙ 詳細設定:言語の自動判定(Gemini)<span id="gemBadge"></span></summary>
@@ -136,6 +136,8 @@ h2{font-size:16px;margin:0 0 8px}
   </div>
   <div class="card">
     <h2><span class="step">1</span>AI にまとめてもらう</h2>
+    <p class="note hidden" id="fillMsg"></p>
+    <div class="row hidden" id="fillRow" style="margin-bottom:8px"><button id="fillBtn">🔁 字幕のない部分を録音から作る</button></div>
     <p class="warn hidden" id="noTx">⚠ 文字起こしがありません。録音ファイルをパソコン版に取り込んでください。</p>
     <div class="row"><button id="copyBtn" class="primary">📋 AI 用にコピー</button></div>
     <div class="row" style="margin-top:8px"><a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini を開く</a></div>
@@ -162,7 +164,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-24b</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-25a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -322,8 +324,9 @@ const elapsed=()=>cur?(Date.now()-cur.start)/1000:0;
 function saveSoon(){clearTimeout(saveT);saveT=setTimeout(()=>cur&&put(stripLive(cur)),800)}
 const stripLive=m=>({...m});
 async function keepAwake(){try{if('wakeLock' in navigator)wake=await navigator.wakeLock.request('screen')}catch(e){}}
-document.addEventListener('visibilitychange',()=>{if(cur&&document.visibilityState==='visible'){keepAwake();if(cur.useCap&&!rec)startSR()}
-  if(cur&&document.visibilityState==='hidden')warn('画面が切り替わりました。録音・字幕が止まっている可能性があります')});
+document.addEventListener('visibilitychange',()=>{if(cur){cur.gaps=cur.gaps||[];const g=cur.gaps[cur.gaps.length-1];if(document.visibilityState==='hidden'){if(!g||g.e!=null)cur.gaps.push({s:elapsed()})}else if(g&&g.e==null){g.e=elapsed();saveSoon()}}
+  if(cur&&document.visibilityState==='visible'){keepAwake();try{actx&&actx.resume()}catch(e){}if(cur.useCap&&!rec)startSR()}
+  if(cur&&document.visibilityState==='hidden')warn('画面が消えている間の字幕は、会議を終えたあと録音から自動で作ります')});
 function warn(t){const w=$('#liveWarn');w.textContent='⚠ '+t;w.classList.remove('hidden')}
 function addLine(text,o={}){const m=o.m||cur;if(!m)return;const t=o.t!=null?o.t:elapsed();const r={t,time:hms(new Date(m.start+t*1000)),lang:o.lang||lang,text:text.trim()};if(o.tr)r.tr=o.tr;if(!r.text)return;m.lines.push(r);
   if(m!==cur){put(m);return}
@@ -376,7 +379,22 @@ $('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えま�
   else if(interimEl&&interimEl.textContent.trim()&&m.mode!=='rec')addLine(interimEl.textContent);
   if(mr&&mr.state!=='inactive'){await new Promise(ok=>{mr.addEventListener('stop',()=>setTimeout(ok,300),{once:true});mr.stop()})}
   stream&&stream.getTracks().forEach(t=>t.stop());stream=null;mr=null;try{wake&&wake.release()}catch(e){}
-  m.duration=elapsed();m.notes=$('#liveNotes').value;cur=null;await finalize(m);openDetail(m.id)};
+  m.duration=elapsed();m.notes=$('#liveNotes').value;{const g=(m.gaps||[])[(m.gaps||[]).length-1];if(g&&g.e==null)g.e=m.duration}cur=null;await finalize(m);await openDetail(m.id);
+  if((m.gaps||[]).some(g=>g.e-g.s>=3)&&gemKey&&GEM_PROXY)backfill(m)};
+// 画面が消えていた間(字幕が止まっていた間)の字幕を、録音から Gemini で作る
+async function backfill(m){if(backfill.busy)return;const gaps=(m.gaps||[]).filter(g=>g.e-g.s>=3);if(!gaps.length||!(m.audio&&m.audio.size))return;
+  if(!gemKey||!GEM_PROXY)return toast('この機能は共有リンクから開いたときだけ使えます');backfill.busy=1;const st=$('#fillMsg');const say=t=>{st.textContent=t;st.classList.remove('hidden')};
+  try{say('画面が消えていた間の字幕を録音から作成中…(画面を開いたままにしてください)');
+    const AC=window.AudioContext||window.webkitAudioContext;let ac;try{ac=new AC({sampleRate:16000})}catch(e){ac=new AC()}
+    const buf=await ac.decodeAudioData(await m.audio.arrayBuffer());const R=buf.sampleRate,data=buf.getChannelData(0);try{ac.close()}catch(e){}
+    const pieces=[];for(const g of gaps){for(let t=Math.max(0,g.s-1);t<Math.min(buf.duration,g.e+1);t+=10)pieces.push([t,Math.min(t+10,g.e+1,buf.duration)])}
+    let done=0,added=0;gemCtx=[];
+    for(const [a,b] of pieces){const {blob,rms}=toWav([data.subarray(Math.floor(a*R),Math.floor(b*R))],R);done++;say(`字幕を作成中… ${done}/${pieces.length}`);if(rms<0.004)continue;
+      const res=await gemFetch(blob);if(res.err){if([401,403].includes(res.err.status))throw res.err;continue}
+      for(const it of res.arr)if(it&&it.text&&String(it.text).trim()){addLine(String(it.text),{m,t:a,lang:GL[it.lang]||'ja-JP',tr:String(it.tr||'').trim(),gem:true});added++;gemCtx.push({lang:it.lang})}}
+    m.lines.sort((x,y)=>x.t-y.t);m.gaps=(m.gaps||[]).map(g=>Object.assign(g,{filled:true}));await put(m);if(doc&&doc.id===m.id){doc=m;openDetail(m.id)}
+    say(added?`✓ 画面が消えていた間の字幕を ${added} 行追加しました`:'追加できる字幕はありませんでした(無音だった可能性)')}
+  catch(e){say('字幕を作れませんでした:'+e.message+'(録音はそのまま残っています)')}finally{backfill.busy=0}}
 async function finalize(m){const ch=await chunksOf(m.id);if(ch.length)m.audio=new Blob(ch,{type:(m.mime||'audio/webm').split(';')[0]});
   if(!m.duration&&m.lines.length)m.duration=m.lines[m.lines.length-1].t;m.status='done';await put(m);await delChunks(m.id)}
 // 途中で閉じた会議を復旧
@@ -431,9 +449,11 @@ async function openDetail(id){doc=await get(id);if(!doc)return;const m=doc;
   const noTx=!m.lines.length;$('#noTx').classList.toggle('hidden',!noTx);$('#copyBtn').disabled=noTx;$('#dlTx').disabled=noTx;
   const hasA=!!(m.audio&&m.audio.size);$('#shareAudio').disabled=!hasA;$('#dlAudio').disabled=!hasA;
   $('#audioInfo').textContent=hasA?`録音ファイル:${(m.audio.size/1048576).toFixed(1)} MB(${extOf(m.audio.type)})`:'録音ファイルはありません(字幕だけモード)';
+  $('#fillRow').classList.toggle('hidden',!(hasA&&gemKey&&GEM_PROXY&&(m.gaps||[]).some(g=>g.e-g.s>=3&&!g.filled)));if(!backfill.busy)$('#fillMsg').classList.add('hidden');
   editing=false;$('#editTx').textContent='✏️ 編集';renderLines();
   show('detail')}
 let dT=null,editing=false;
+$('#fillBtn').onclick=()=>{if(doc){$('#fillRow').classList.add('hidden');backfill(doc)}};
 function renderLines(){const m=doc,el=$('#dLines');el.classList.toggle('editing',editing);$('#editNote').classList.toggle('hidden',!editing);
   if(!editing){el.innerHTML=m.lines.length?m.lines.map(r=>`<div class="ln"><small>${r.time}</small>${esc(r.text)}${r.tr?`<div class="trl">→ ${esc(r.tr)}</div>`:''}</div>`).join(''):'<p class="note">なし</p>';return}
   el.innerHTML=m.lines.map((r,i)=>`<div class="eln" data-i="${i}"><small class="note">${r.time}</small><div class="f"><textarea rows="2" data-k="text">${esc(r.text)}</textarea>${r.tr!=null?`<textarea rows="1" data-k="tr" placeholder="訳">${esc(r.tr)}</textarea>`:''}</div><button class="del danger">🗑</button></div>`).join('')||'<p class="note">なし</p>';
