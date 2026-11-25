@@ -106,6 +106,7 @@ h2{font-size:16px;margin:0 0 8px}
     <h2>これまでの会議</h2>
     <div id="list"><p class="note">まだありません</p></div>
     <p class="note">記録はこのスマホのこのブラウザの中だけに保存されます(他の人とは共有されません)。</p>
+    <p class="note" id="useInfo"></p>
     <label for="keepDays">保存期間(過ぎた会議は自動で削除)</label>
     <select id="keepDays"><option value="7">7 日</option><option value="30">30 日</option><option value="90">90 日</option><option value="0">無期限</option></select>
     <div style="margin-top:8px"><button id="delAll" class="danger" style="width:100%">🗑 すべての会議を削除</button></div>
@@ -164,7 +165,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-25a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-25b</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -314,9 +315,10 @@ function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;lastErr=e.mes
 
 // ---------- 一覧 ----------
 async function renderList(){const ms=(await all()).sort((a,b)=>b.id-a.id);const el=$('#list');
-  if(!ms.length){el.innerHTML='<p class="note">まだありません</p>';return}
-  el.innerHTML=ms.map(m=>`<div class="item" data-id="${m.id}"><div><b>${esc(m.name||'(名前なし)')}</b><span class="note">${new Date(m.start).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}・${dur(m.duration)}・${m.lines.length}行${m.summary?'・議事録あり':''}${m.status==='recording'?'・<span class="warn">途中で止まりました</span>':''}</span></div><span>›</span></div>`).join('');
-  el.querySelectorAll('.item').forEach(i=>i.onclick=()=>openDetail(+i.dataset.id))}
+  if(!ms.length){el.innerHTML='<p class="note">まだありません</p>';$('#useInfo').textContent='';return}
+  el.innerHTML=ms.map(m=>`<div class="item" data-id="${m.id}"><div><b>${esc(m.name||'(名前なし)')}</b><span class="note">${new Date(m.start).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}・${dur(m.duration)}・${m.lines.length}行${m.audio&&m.audio.size?'・🎙 録音 '+(m.audio.size/1048576).toFixed(1)+' MB':''}${m.summary?'・議事録あり':''}${m.status==='recording'?'・<span class="warn">途中で止まりました</span>':''}</span></div><span>›</span></div>`).join('');
+  el.querySelectorAll('.item').forEach(i=>i.onclick=()=>openDetail(+i.dataset.id));
+  try{const tot=ms.reduce((a,m)=>a+(m.audio&&m.audio.size||0),0);$('#useInfo').textContent=`このスマホに保存中:会議 ${ms.length} 件・録音 合計 ${(tot/1048576).toFixed(1)} MB。録音はファイルとしては見えません。消すときは会議を開いて「🗑 この会議を削除」か、下の「すべての会議を削除」を押してください。`}catch(e){}}
 
 // ---------- 録音・字幕 ----------
 let cur=null,rec=null,mr=null,stream=null,seq=0,tick=null,wake=null,interimEl=null,saveT=null;
