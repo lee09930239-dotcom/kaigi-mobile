@@ -31,8 +31,7 @@ label{display:block;font-size:14px;color:var(--sub);margin:10px 0 4px}
 input,textarea,select{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
 textarea{min-height:90px;resize:vertical}
 .big{font-size:20px;min-height:58px;width:100%}
-#caps{height:30vh;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:18px}
-#caps .ln{font-size:15px}
+#caps{height:52vh;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:18px}
 .ln{padding:4px 0;border-bottom:1px dashed var(--line)}
 .ln small{color:var(--sub);font-size:12px;margin-right:6px}
 .int{color:var(--int)}
@@ -57,19 +56,6 @@ h2{font-size:16px;margin:0 0 8px}
 .eln .f{flex:1}
 .eln textarea{min-height:0;padding:6px;font-size:15px}
 .eln .del{min-height:36px;padding:4px 8px}
-/* 現在の要点 */
-#dg{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-top:10px}
-#dg .hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-#dg .hd b{font-size:17px;flex:1;white-space:nowrap}
-#dg .hd select{width:auto;padding:4px 6px;font-size:13px}
-#dg .hd button{min-height:34px;padding:4px 10px;font-size:13px}
-#dgSt{font-size:12px;color:var(--sub);margin:4px 0 2px}
-.dgb{border-left:5px solid var(--line);padding:4px 10px;margin:8px 0}
-.dgb h4{margin:0 0 2px;font-size:13px;color:var(--sub)}
-.dgb ul{margin:0;padding-left:20px}.dgb li{font-size:17px;line-height:1.5}
-.dgb .none{font-size:13px;color:var(--sub)}
-.dgb.direction{border-color:var(--pri)}.dgb.agreed{border-color:var(--ok)}.dgb.open{border-color:var(--warn)}.dgb.now li{font-size:15px}
-#dg details summary{font-size:13px;color:var(--sub)}#dg .hi{font-size:13px;color:var(--sub);border-top:1px dashed var(--line);padding:4px 0}
 </style>
 </head>
 <body>
@@ -133,13 +119,6 @@ h2{font-size:16px;margin:0 0 8px}
   <div class="seg" id="tgtSeg2" style="margin-top:6px"><button data-t="auto">訳:自動</button><button data-t="ja">訳:日</button><button data-t="zh-TW">訳:中</button><button data-t="off">訳なし</button></div>
   <p class="warn hidden" id="liveWarn"></p>
   <div id="fallBox" class="hidden" style="margin:8px 0"><button id="toManual" class="primary" style="width:100%">手動モードに切り替える(字幕を続ける)</button><p class="note">録音はそのまま続きます。自動判定はこの会議では止まります。</p></div>
-  <div id="dg">
-    <div class="hd"><b id="dgTitle">📌 現在の要点</b>
-      <select id="dgLang"><option value="ja">日本語</option><option value="zh">中文</option><option value="en">English</option></select>
-      <select id="dgInt"><option value="120">2分ごと</option><option value="180">3分ごと</option><option value="300">5分ごと</option><option value="600">10分ごと</option><option value="0">自動なし</option></select>
-      <button id="dgNow">今すぐ</button></div>
-    <div id="dgSt"></div><div id="dgBody"></div>
-  </div>
   <div id="caps" style="margin-top:10px"></div>
   <label for="liveNotes">メモ(会議中に書けます)</label>
   <textarea id="liveNotes" placeholder="大事な数字・決まったことなど"></textarea>
@@ -181,7 +160,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-26a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-21g</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -371,59 +350,15 @@ async function startMeeting(){let mode=$('#mode').value==='gem'&&!gemKey?'both':
   $('#liveMode').textContent={both:'録音中・字幕あり',cap:'字幕のみ(録音なし)',rec:'録音のみ(字幕なし)',gem:'録音中・自動判定(Gemini)'}[mode];$('#langSeg2').classList.toggle('hidden',isGem);$('#tgtSeg2').classList.toggle('hidden',isGem);
   if(isGem)interimEl.textContent='(言語は自動判定。約 6 秒ごとに字幕が出ます)';
   if(!useCap&&!isGem)interimEl.textContent='(字幕なしモード。録音は続いています)';
-  setLangUI();show('live');keepAwake();if(useCap)startSR();dgStart();
+  setLangUI();show('live');keepAwake();if(useCap)startSR();
   clearInterval(srWatch);if(useCap)srWatch=setInterval(()=>{if(!cur||!rec)return;const t=interimEl.textContent;if(itStart&&(Date.now()-itStart>10000||t.length>90))forceCommit()},1000);
   tick=setInterval(()=>{const s=Math.floor(elapsed());$('#timer').textContent=(s>=3600?pad(Math.floor(s/3600))+':':'')+pad(Math.floor(s%3600/60))+':'+pad(s%60)},500)}
 $('#toManual').onclick=()=>{const m=cur;if(!m||!m.gem)return;stopPCM(m);m.gem=false;m.mode='both';$('#fallBox').classList.add('hidden');$('#liveWarn').classList.add('hidden');
   $('#langSeg2').classList.remove('hidden');$('#tgtSeg2').classList.remove('hidden');$('#liveMode').textContent='録音中・字幕あり(手動)';
   if(SR){m.useCap=true;interimEl.textContent='';startSR();toast('手動モードに切り替えました。話している言語のボタンを押してください')}else toast('このブラウザは手動字幕に対応していません。録音は続いています')};
-// ---------- 現在の要点:数分ごとに Gemini で「会議の流れ・合意事項・未決事項・今の話題」をまとめる ----------
-const LS2={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
-let dgLang=LS2.get('dgLang','ja'),dgInt=+LS2.get('dgInt','180'),dgState='',dgMsg='',dgLast=0,dgTimer=null;
-const DG={zh:{title:'📌 目前重點',direction:'🧭 會議走向',agreed:'✅ 目前共識',open:'❓ 還沒結論・要確認',now:'💬 現在在談',none:'(還沒有)',hist:'之前的整理',
-    wait:'開始說話後,每隔幾分鐘會在這裡整理會議走向和共識。',upd:'更新',next:'下次',run:'整理中…',tr:'翻譯中…',name:'台灣繁體中文'},
-  ja:{title:'📌 現在の要点',direction:'🧭 会議の流れ',agreed:'✅ 合意事項',open:'❓ 未決・要確認',now:'💬 今の話題',none:'(まだなし)',hist:'過去の要点',
-    wait:'話し始めると、数分ごとにここへ会議の流れと合意事項をまとめます。',upd:'更新',next:'次回',run:'まとめ中…',tr:'翻訳中…',name:'日本語'},
-  en:{title:'📌 Key points',direction:'🧭 Direction',agreed:'✅ Agreed',open:'❓ Open / to confirm',now:'💬 Now discussing',none:'(none yet)',hist:'Earlier',
-    wait:'The direction and agreements will be summarized here every few minutes.',upd:'updated',next:'next',run:'Summarizing…',tr:'Translating…',name:'English'}};
-const DG_KEYS=['direction','agreed','open','now'];
-const hm5=d=>d.toTimeString().slice(0,5);
-function dgData(it,l){return it.lang===l?it.data:(it.tr&&it.tr[l])||null}
-function dgRender(){const m=cur,L=DG[dgLang]||DG.ja;$('#dgLang').value=dgLang;$('#dgInt').value=String(dgInt);$('#dgTitle').textContent=L.title;
-  $('#dgNow').disabled=!gemKey||dgState==='running';
-  if(!gemKey){$('#dgSt').textContent='';$('#dgBody').innerHTML='<p class="note">ホームの「⚙ 詳細設定」で Gemini のキーを設定すると、数分ごとに会議の流れと合意事項をここにまとめます。</p>';return}
-  const ds=(m&&m.digests)||[],last=ds[ds.length-1];
-  $('#dgSt').innerHTML=dgState==='running'?L.run:dgState==='translating'?L.tr:dgState==='error'?'<span class="err">'+esc(dgMsg)+'</span>':last?`${last.time} ${L.upd}`+(dgInt?`・${L.next} ${hm5(new Date(dgLast+dgInt*1000))}`:''):'';
-  if(!last){$('#dgBody').innerHTML=`<p class="note">${L.wait}</p>`;return}
-  const d=dgData(last,dgLang)||last.data;
-  const box=k=>`<div class="dgb ${k}"><h4>${L[k]}</h4>${(d[k]||[]).length?'<ul>'+d[k].map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<div class="none">'+L.none+'</div>'}</div>`;
-  const hist=ds.slice(0,-1).reverse().map(it=>{const x=dgData(it,dgLang)||it.data;return `<div class="hi"><b>${it.time}</b> ${esc((x.direction||[]).join(' / '))}</div>`}).join('');
-  $('#dgBody').innerHTML=DG_KEYS.map(box).join('')+(hist?`<details><summary>${L.hist}(${ds.length-1})</summary>${hist}</details>`:'')}
-function dgClean(o){const r={};DG_KEYS.forEach(k=>{const v=o&&o[k];r[k]=(Array.isArray(v)?v:v?[v]:[]).map(x=>String(x).trim()).filter(Boolean)});return r}
-function dgJson(t){return JSON.parse(String(t).replace(/^\s*```(json)?|```\s*$/g,'').trim())}
-async function dgRun(force){const m=cur;if(!m||!gemKey||dgState==='running')return;m.digests=m.digests||[];
-  const from=m.digests.length?(m.digests[m.digests.length-1].upto||0):0,news=m.lines.slice(from);dgLast=Date.now();
-  if(!news.length&&!force)return;let tx=news.map(l=>`[${(l.time||'').slice(0,5)}] ${l.text}`).join('\n');if(tx.length>6000)tx=tx.slice(-6000);
-  const L=DG[dgLang]||DG.ja,prev=m.digests.length?m.digests[m.digests.length-1].data:null,upto=m.lines.length;dgState='running';dgRender();
-  const p='あなたは会議の記録係です。「前回の要点」と「最新の文字起こし」(音声認識の結果で誤字あり)から、更新した要点を JSON {"direction":[],"agreed":[],"open":[],"now":[]} で出してください。\n'+
-    '- direction: 会議の流れ。1〜2 文で、何の話から何の話に移り、今どこへ向かっているか\n- agreed: ここまでに合意・決定したこと。前回の分は覆らない限り残し、新しいものを足す。数字・日付・担当を具体的に\n'+
-    '- open: まだ結論が出ていない・確認や回答が必要なこと。解決したものは消す\n- now: 今話している話題(1 つ)\n'+
-    `各項目は短い 1 文。文字起こしにないことは書かない。なければ空の配列。すべて${L.name}で書く。\n\n会議名:${m.name}\n`+
-    ($('#liveNotes').value.trim()?`メモ:${$('#liveNotes').value.trim().slice(-600)}\n`:'')+(prev?'前回の要点:'+JSON.stringify(prev)+'\n':'')+'最新の文字起こし:\n'+(tx||'(この間、新しい発言なし)');
-  try{const data=dgClean(dgJson(await gemCall([{text:p}],true,60000)));
-    m.digests.push({n:m.digests.length+1,time:hm5(new Date()),t:Math.round(elapsed()),lang:dgLang,upto,data});dgState='';if(cur===m)saveSoon();else put(m)}
-  catch(e){dgState='error';dgMsg='要点のまとめに失敗:'+e.message}dgLast=Date.now();if(cur===m)dgRender()}
-async function dgTranslate(){const m=cur,ds=(m&&m.digests)||[],it=ds[ds.length-1];if(!it||!gemKey||dgData(it,dgLang)||dgState==='running')return dgRender();
-  const l=dgLang;dgState='translating';dgRender();
-  try{(it.tr=it.tr||{})[l]=dgClean(dgJson(await gemCall([{text:`次の JSON の各文字列を自然な${DG[l].name}に訳してください。構造と項目数はそのまま、JSON だけを出力。\n`+JSON.stringify(it.data)}],true,30000)));dgState='';saveSoon()}
-  catch(e){dgState='error';dgMsg='翻訳に失敗:'+e.message}dgRender()}
-function dgStart(){dgState='';dgLast=Date.now();dgRender();clearInterval(dgTimer);dgTimer=setInterval(()=>{if(cur&&dgInt>0&&Date.now()-dgLast>=dgInt*1000)dgRun(false)},5000)}
-$('#dgLang').onchange=()=>{dgLang=$('#dgLang').value;LS2.set('dgLang',dgLang);dgTranslate()};
-$('#dgInt').onchange=()=>{dgInt=+$('#dgInt').value;LS2.set('dgInt',dgInt);dgLast=Date.now();dgRender()};
-$('#dgNow').onclick=()=>dgRun(true);
 $('#liveNotes').oninput=()=>{if(cur){cur.notes=$('#liveNotes').value;saveSoon()}};
 $('#startBtn').onclick=startMeeting;
-$('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);clearInterval(srWatch);clearInterval(dgTimer);
+$('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);clearInterval(srWatch);
   if(rec){const r=rec;rec=null;try{r.stop()}catch(e){}}
   if(m.gem){stopPCM(m);m.gem=false;
     toast('最後の字幕を作成中…');await Promise.race([gemQ,new Promise(ok=>setTimeout(ok,40000))])}
