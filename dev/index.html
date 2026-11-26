@@ -69,6 +69,8 @@ h2{font-size:16px;margin:0 0 8px}
 .dgb ul{margin:0;padding-left:20px}.dgb li{font-size:17px;line-height:1.5}
 .dgb .none{font-size:13px;color:var(--sub)}
 .dgb.direction{border-color:var(--pri)}.dgb.agreed{border-color:var(--ok)}.dgb.open{border-color:var(--warn)}.dgb.now li{font-size:15px}
+#dgTurn{margin:8px 0 10px;padding:8px 10px;border:2px solid var(--pri);border-radius:10px}#dgTurn .tw{font-size:12px;color:var(--sub);margin-bottom:3px}#dgTurn .tc{font-size:19px;font-weight:bold;line-height:1.45}#dgTurn ul{margin:4px 0 0 18px;padding:0}#dgTurn li{font-size:16px;margin:2px 0}
+.outs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0 8px}.outs label{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0;font-size:15px}.outs input{width:20px;height:20px}
 #dg details summary{font-size:13px;color:var(--sub)}#dg .hi{font-size:13px;color:var(--sub);border-top:1px dashed var(--line);padding:4px 0}
 </style>
 </head>
@@ -158,20 +160,36 @@ h2{font-size:16px;margin:0 0 8px}
   </div>
   <div class="card">
     <h2><span class="step">1</span>AI にまとめてもらう</h2>
+    <div id="gemSumBox"><button id="gemSum" class="primary" style="width:100%">✨ Gemini で議事録を作る</button>
+      <p class="note" id="gemSumNote">結果は下の ② に入ります(30 秒〜1 分)。</p></div>
+    <p class="note hidden" id="gemSumOff">ホームの「⚙ 詳細設定」で Gemini のアクセスコードを設定すると、ボタン 1 つで議事録を作れます。</p>
     <p class="note hidden" id="fillMsg"></p>
     <div class="row hidden" id="fillRow" style="margin-bottom:8px"><button id="fillBtn">🔁 字幕のない部分を録音から作る</button></div>
     <p class="warn hidden" id="noTx">⚠ 文字起こしがありません。録音ファイルをパソコン版に取り込んでください。</p>
-    <div class="row"><button id="copyBtn" class="primary">📋 AI 用にコピー</button></div>
-    <div class="row" style="margin-top:8px"><a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini を開く</a></div>
-    <p class="note">AI の入力欄を長押し → 「ペースト」→ 送信。</p>
+    <details id="copyBox" style="margin-top:8px"><summary class="note">ChatGPT・Claude などを使う(コピー&貼り付け)</summary>
+    <div class="row" style="margin-top:8px"><button id="copyBtn">📋 AI 用にコピー</button></div>
+    <div class="row" style="margin-top:8px"><a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a><a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">Claude を開く</a></div>
+    <p class="note">AI の入力欄を長押し → 「ペースト」→ 送信。回答を ② に貼り付けてください。</p></details>
   </div>
   <div class="card">
-    <h2><span class="step">2</span>AI の回答を貼り付け(保存されます)</h2>
-    <textarea id="dSummary" placeholder="=====摘要===== から始まる回答をそのまま貼り付け" style="min-height:140px"></textarea>
-    <div class="row" style="margin-top:8px"><button id="copySum">📋 議事録をコピー</button><button id="dlSum">⬇ 議事録 (.txt)</button></div>
+    <h2><span class="step">2</span>議事録(ここで直せます・自動保存)</h2>
+    <textarea id="dSummary" placeholder="① で作った議事録がここに入ります(ChatGPT などの回答はここに貼り付け)" style="min-height:140px"></textarea>
+    <div style="text-align:right;margin-top:6px"><button id="copySum" style="min-height:34px;padding:4px 12px;font-size:14px">📋 文字をコピー</button></div>
+    <div id="revBox" style="margin-top:8px"><label for="revTx" style="margin-top:0">直したいところ(Gemini が直します)</label>
+      <textarea id="revTx" placeholder="例:もっと短く / 結論を一番上に / 「王さん」は「汪さん」" style="min-height:64px"></textarea>
+      <button id="revBtn" style="width:100%;margin-top:6px">✏️ Gemini で直す</button><p class="note" id="revNote"></p></div>
   </div>
   <div class="card">
-    <h2><span class="step">3</span>パソコンに送る・保存する</h2>
+    <h2><span class="step">3</span>議事録をファイルにする</h2>
+    <div class="outs" id="outs">
+      <label><input type="checkbox" data-o="pdf-ja"> PDF 日本語</label><label><input type="checkbox" data-o="pdf-zh"> PDF 中文</label>
+      <label><input type="checkbox" data-o="word-ja"> Word 日本語</label><label><input type="checkbox" data-o="word-zh"> Word 中文</label></div>
+    <button id="outBtn" class="primary" style="width:100%">⬇ 保存する</button>
+    <div style="margin-top:8px"><button id="dlSum" style="width:100%">⬇ テキスト (.txt)</button></div>
+    <p class="note" id="outNote">② の議事録を PDF や Word のファイルにして、スマホに保存します(メール・LINE で送れます)。中文は Gemini が日本語から訳します。PDF は印刷画面が開くので「PDF として保存」を選んでください。</p>
+  </div>
+  <div class="card">
+    <h2><span class="step">4</span>パソコンに送る・保存する</h2>
     <p class="note" id="audioInfo"></p>
     <div class="row"><button id="shareAudio">📤 録音を送る</button><button id="dlAudio">⬇ 録音を保存</button></div>
     <div class="row" style="margin-top:8px"><button id="dlAll">⬇ まとめて書き出す (.txt)</button></div>
@@ -186,7 +204,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-26a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-26d</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -353,6 +371,7 @@ document.addEventListener('visibilitychange',()=>{if(cur){cur.gaps=cur.gaps||[];
 function warn(t){const w=$('#liveWarn');w.textContent='⚠ '+t;w.classList.remove('hidden')}
 function addLine(text,o={}){const m=o.m||cur;if(!m)return;const t=o.t!=null?o.t:elapsed();const r={t,time:hms(new Date(m.start+t*1000)),lang:o.lang||lang,text:text.trim()};if(o.tr)r.tr=o.tr;if(!r.text)return;m.lines.push(r);
   if(m!==cur){put(m);return}
+  lastLineAt=Date.now();
   const d=document.createElement('div');d.className='ln';d.innerHTML=`<small>${r.time}</small>${esc(r.text)}<div class="trl"></div>`;$('#caps').insertBefore(d,interimEl);$('#caps').scrollTop=1e9;saveSoon();if(o.gem){if(r.tr)d.querySelector('.trl').textContent='→ '+r.tr}else translate(r,d.querySelector('.trl'))}
 let itStart=0,srWatch=null;
 // 長く話し続けて区切りが来ないとき:途中までを確定して認識をやり直す
@@ -410,11 +429,11 @@ function dgRender(){const m=cur,L=DG[dgLang]||DG.ja;$('#dgLang').value=dgLang;$(
   if(!gemKey){$('#dgSt').textContent='';$('#dgBody').innerHTML='<p class="note">ホームの「⚙ 詳細設定」で Gemini のアクセスコードを設定すると、数分ごとに会議の流れと合意事項をここにまとめます。</p>';return}
   const ds=(m&&m.digests)||[],last=ds[ds.length-1];
   $('#dgSt').innerHTML=dgState==='running'?L.run:dgState==='translating'?L.tr:dgState==='error'?'<span class="err">'+esc(dgMsg)+'</span>':last?`${last.time} ${L.upd}`+(dgInt?`・${L.next} ${hm5(new Date(dgLast+dgInt*1000))}`:''):'';
-  if(!last){$('#dgBody').innerHTML=`<p class="note">${L.wait}</p>`;return}
+  if(!last){$('#dgBody').innerHTML=turnHtml()+`<p class="note">${L.wait}</p>`;return}
   const d=dgData(last,dgLang)||last.data;
   const box=k=>`<div class="dgb ${k}"><h4>${L[k]}</h4>${(d[k]||[]).length?'<ul>'+d[k].map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<div class="none">'+L.none+'</div>'}</div>`;
   const hist=ds.slice(0,-1).reverse().map(it=>{const x=dgData(it,dgLang)||it.data;return `<div class="hi"><b>${it.time}</b> ${esc((x.direction||[]).join(' / '))}</div>`}).join('');
-  $('#dgBody').innerHTML=DG_KEYS.map(box).join('')+(hist?`<details><summary>${L.hist}(${ds.length-1})</summary>${hist}</details>`:'')}
+  $('#dgBody').innerHTML=turnHtml()+DG_KEYS.map(box).join('')+(hist?`<details><summary>${L.hist}(${ds.length-1})</summary>${hist}</details>`:'')}
 function dgClean(o){const r={};DG_KEYS.forEach(k=>{const v=o&&o[k];r[k]=(Array.isArray(v)?v:v?[v]:[]).map(x=>String(x).trim()).filter(Boolean)});return r}
 function dgJson(t){return JSON.parse(String(t).replace(/^\s*```(json)?|```\s*$/g,'').trim())}
 async function dgRun(force){const m=cur;if(!m||!gemKey||dgState==='running')return;m.digests=m.digests||[];
@@ -433,7 +452,32 @@ async function dgTranslate(){const m=cur,ds=(m&&m.digests)||[],it=ds[ds.length-1
   const l=dgLang;dgState='translating';dgRender();
   try{(it.tr=it.tr||{})[l]=dgClean(dgJson(await gemCall([{text:`次の JSON の各文字列を自然な${DG[l].name}に訳してください。構造と項目数はそのまま、JSON だけを出力。\n`+JSON.stringify(it.data)}],true,30000)));dgState='';saveSoon()}
   catch(e){dgState='error';dgMsg='翻訳に失敗:'+e.message}dgRender()}
-function dgStart(){dgState='';dgLast=Date.now();dgRender();clearInterval(dgTimer);dgTimer=setInterval(()=>{if(cur&&dgInt>0&&Date.now()-dgLast>=dgInt*1000)dgRun(false)},5000)}
+// ---------- さっきの発言:同じ言語で長く話して 3 秒止まったら「結論 → 背景」でまとめる(通訳用) ----------
+const TURN_MIN={zh:60,ja:80,en:120};let lastLineAt=0,turnBusy=false,turnSt=null,turnRun=false;
+const lb=l=>String(l||'').slice(0,2).toLowerCase();
+function turnHtml(){const m=cur,ts=(m&&m.turns)||[],t=ts[ts.length-1];if(!t&&!turnRun)return'';
+  const run=turnRun?'<div class="tw">さっきの発言をまとめ中…</div>':'';if(!t)return `<div id="dgTurn">${run}</div>`;
+  const lab=t.lang==='ja'?'中 → 日本語の要点':'日 → 中文重點';
+  return `<div id="dgTurn">${run}<div class="tw">🗣 ${esc(t.time)} さっきの発言 ${lab}</div><div class="tc">${esc(t.data.conclusion||'')}</div>${(t.data.background||[]).length?'<ul>'+t.data.background.slice(0,3).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':''}</div>`}
+async function turnTick(){const m=cur;if(!m||!gemKey||turnBusy||!lastLineAt||Date.now()-lastLineAt<3000)return;
+  const ls=m.lines;if(!ls.length)return;const L0=lb(ls[ls.length-1].lang);let s=ls.length-1;
+  while(s>0&&lb(ls[s-1].lang)===L0&&ls.length-s<60)s--;
+  const run=ls.slice(s),n=run.reduce((a,l)=>a+l.text.length,0);if(!TURN_MIN[L0]||n<TURN_MIN[L0])return;
+  if(turnSt&&turnSt[0]===m.id&&turnSt[1]===s&&(turnSt[2]===ls.length||n<turnSt[3]+30))return;
+  turnSt=[m.id,s,ls.length,n];const tl=L0==='zh'?'ja':'zh',tn=tl==='ja'?'日本語':'台灣繁體中文';
+  const text=run.map(l=>l.text).join('').slice(-1500);
+  const p=`あなたは会議通訳を手伝います。次は相手または自分が今話し終えた発言です(音声認識の結果で誤字あり)。通訳がこれから相手側に伝えます。\n`+
+    `${tn}で JSON {"conclusion":"","background":[]} を出してください。conclusion = この発言の結論・一番伝えたいこと(1 文)。background = 結論を支える理由・背景・数字・条件(最大 3 つ、各 1 文、大事な順)。`+
+    `結論が先、背景はあと。通訳がそのまま話せる自然な文に。数字・日付・社名・型番は残す。発言にないことは書かない。\n\n発言:\n`+text;
+  turnBusy=true;turnRun=true;dgRender();
+  try{const d=dgJson(await gemCall([{text:p}],true,15000));if(cur!==m)return;m.turns=m.turns||[];
+    const it={time:(run[0].time||'').slice(0,5),src:L0,lang:tl,from:s,upto:ls.length,
+      data:{conclusion:String(d.conclusion||'').trim(),background:(Array.isArray(d.background)?d.background:[]).map(x=>String(x).trim()).filter(Boolean).slice(0,3)}};
+    const lt=m.turns[m.turns.length-1];if(lt&&lt.from===s){it.n=lt.n;m.turns[m.turns.length-1]=it}else{it.n=m.turns.length+1;m.turns.push(it)}saveSoon()}
+  catch(e){console.log('さっきの発言のまとめに失敗',e.message)}
+  finally{turnBusy=false;turnRun=false;if(cur===m)dgRender()}}
+setInterval(turnTick,1000);
+function dgStart(){lastLineAt=0;turnSt=null;dgState='';dgLast=Date.now();dgRender();clearInterval(dgTimer);dgTimer=setInterval(()=>{if(cur&&dgInt>0&&Date.now()-dgLast>=dgInt*1000)dgRun(false)},5000)}
 $('#dgLang').onchange=()=>{dgLang=$('#dgLang').value;LS2.set('dgLang',dgLang);dgTranslate()};
 $('#dgInt').onchange=()=>{dgInt=+$('#dgInt').value;LS2.set('dgInt',dgInt);dgLast=Date.now();dgRender()};
 $('#dgNow').onclick=()=>dgRun(true);
@@ -517,6 +561,7 @@ async function openDetail(id){doc=await get(id);if(!doc)return;const m=doc;
   const hasA=!!(m.audio&&m.audio.size);$('#shareAudio').disabled=!hasA;$('#dlAudio').disabled=!hasA;
   $('#audioInfo').textContent=hasA?`録音ファイル:${(m.audio.size/1048576).toFixed(1)} MB(${extOf(m.audio.type)})`:'録音ファイルはありません(字幕だけモード)';
   $('#fillRow').classList.toggle('hidden',!(hasA&&gemKey&&GEM_PROXY&&(m.gaps||[]).some(g=>g.e-g.s>=3&&!g.filled)));if(!backfill.busy)$('#fillMsg').classList.add('hidden');
+  const g=!!(gemKey&&GEM_PROXY);$('#gemSumBox').classList.toggle('hidden',!g);$('#gemSumOff').classList.toggle('hidden',g);$('#copyBox').open=!g;$('#revBox').classList.toggle('hidden',!g);$('#revNote').textContent='';$('#gemSum').disabled=noTx;
   editing=false;$('#editTx').textContent='✏️ 編集';renderLines();
   show('detail')}
 let dT=null,editing=false;
@@ -538,6 +583,36 @@ $('#dlSum').onclick=()=>{if(!doc.summary.trim())return toast('まだ議事録が
 $('#dlTx').onclick=()=>download(new Blob([`${doc.name}\n${new Date(doc.start).toLocaleString('ja-JP')}\n\n■ メモ\n${doc.notes||'(なし)'}\n\n■ 文字起こし\n${doc.lines.map(r=>`[${r.time}] ${r.text}`+(r.tr?`\n　→ ${r.tr}`:'')).join('\n')}\n`],{type:'text/plain'}),safe(doc.name)+'_文字起こし.txt');
 $('#dlAll').onclick=()=>{const d=doc;const t=[`■ 会議名:${d.name}`,`■ 日時:${new Date(d.start).toLocaleString('ja-JP')}(${dur(d.duration)})`,'',`■ メモ`,d.notes||'(なし)','',`■ 議事録`,d.summary||'(なし)','',`■ 文字起こし`,d.lines.map(r=>`[${r.time}] ${r.text}`+(r.tr?`\n　→ ${r.tr}`:'')).join('\n')||'(なし)',''].join('\n');
   download(new Blob([t],{type:'text/plain'}),safe(d.name)+'_まとめ.txt')};
+// ---------- 議事録を保存:PDF / Word × 日本語 / 中文 ----------
+function mdHtml(t){return String(t||'').split('\n').map(x=>{let h=esc(x).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  if(/^=====.+=====$/.test(x.trim()))return '<h1>'+esc(x.trim().replace(/=/g,''))+'</h1>';if(/^#{1,3} /.test(x))return '<h2>'+h.replace(/^#{1,3} /,'')+'</h2>';
+  if(/^\s*[-・*] /.test(x))return '<li>'+h.replace(/^\s*[-・*] /,'')+'</li>';return x.trim()?'<p>'+h+'</p>':''}).join('\n').replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g,'$1</ul>').replace(/(^|<\/(?:p|h1|h2|ul)>\n?)(<li>)/g,'$1<ul>$2')}
+function docHtml(d,txt,zh){const dt=new Date(d.start).toLocaleString(zh?'zh-TW':'ja-JP');
+  return `<h1 style="font-size:20px">${esc(d.name)}${zh?'(中文)':''}</h1><p style="color:#555">${esc(dt)}・${esc(dur(d.duration))}</p>`+mdHtml(txt)}
+const DOC_CSS='body{font-family:"Hiragino Sans","Yu Gothic","Microsoft JhengHei","PingFang TC",sans-serif;font-size:11pt;line-height:1.6;color:#111;margin:18mm}h1{font-size:15pt;margin:14px 0 6px;border-bottom:1px solid #999}h2{font-size:13pt;margin:12px 0 4px}ul{margin:2px 0 6px 20px;padding:0}p{margin:3px 0}.pb{page-break-before:always}';
+async function ensureZh(d){if(d.summary_zh&&d.summary_zh_src===d.summary)return d.summary_zh;if(!gemKey)throw new Error('中文にするには Gemini のアクセスコードが必要です(ホームの ⚙ 詳細設定)');
+  const z=await gemCall([{text:'次の会議の議事録を、台灣繁體中文(台湾の言い方)に翻訳してください。見出し・記号・区切り行(=====摘要===== など)・箇条書きの形はそのまま、社名・人名・型番は原文のまま。訳文だけを出力。\n\n'+d.summary}],false,90000);
+  d.summary_zh=z.trim();d.summary_zh_src=d.summary;await put(d);return d.summary_zh}
+$('#outBtn').onclick=async()=>{const d=doc;if(!d)return;const outs=[...document.querySelectorAll('#outs input:checked')].map(x=>x.dataset.o);
+  if(!outs.length)return toast('保存するものを選んでください');if(!(d.summary||'').trim())return toast('先に ② に議事録を貼り付けてください');
+  const pdf=outs.filter(o=>o.startsWith('pdf')),w=pdf.length?window.open('','_blank'):null;if(w)w.document.write('<p style="font:16px sans-serif;padding:20px">準備中…</p>');
+  $('#outBtn').disabled=true;try{const T={ja:d.summary};if(outs.some(o=>o.endsWith('zh'))){$('#outNote').textContent='中文に翻訳中…(30 秒ほど)';T.zh=await ensureZh(d)}
+    for(const o of outs.filter(o=>o.startsWith('word'))){const l=o.slice(5);
+      download(new Blob(['﻿<html><head><meta charset="utf-8"><style>'+DOC_CSS.replace('margin:18mm','')+'</style></head><body>'+docHtml(d,T[l],l==='zh')+'</body></html>'],{type:'application/msword'}),safe(d.name)+'_議事録_'+(l==='zh'?'中文':'日本語')+'.doc')}
+    if(w){const body=pdf.map((o,i)=>{const l=o.slice(4);return `<div class="${i?'pb':''}">`+docHtml(d,T[l],l==='zh')+'</div>'}).join('');
+      w.document.open();w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(safe(d.name))}_議事録</title><style>${DOC_CSS}@media screen{body{margin:16px}}</style></head><body>${body}<script>setTimeout(()=>print(),400)<\/script></body></html>`);w.document.close()}
+    $('#outNote').textContent='✓ 保存しました'+(w?'(PDF は印刷画面で「PDF として保存」)':'')}
+  catch(e){if(w)w.close();$('#outNote').textContent='';toast(e.message)}finally{$('#outBtn').disabled=false}};
+$('#gemSum').onclick=async()=>{const d=doc;if(!d||!d.lines.length)return;if((d.summary||'').trim()&&!confirm('② の議事録を作り直しますか?(今の内容は置き換わります)'))return;
+  $('#gemSum').disabled=true;$('#gemSumNote').textContent='Gemini がまとめています…(30 秒〜1 分)';
+  try{const t=(await gemCall([{text:promptOf(d)}],false,120000)).trim();if(!t)throw new Error('空の回答でした');d.summary=t;if(doc===d){$('#dSummary').value=t;await put(d)}
+    $('#gemSumNote').textContent='✓ できました。② で確認・修正して、③ でファイルにしてください'}
+  catch(e){$('#gemSumNote').textContent='失敗しました:'+e.message+'(下の「ChatGPT・Claude などを使う」でも作れます)'}finally{$('#gemSum').disabled=false}};
+$('#revBtn').onclick=async()=>{const d=doc,ask=$('#revTx').value.trim();if(!d)return;if(!(d.summary||'').trim())return toast('先に ① で議事録を作ってください');if(!ask)return toast('直したいところを書いてください');
+  $('#revBtn').disabled=true;$('#revNote').textContent='Gemini が直しています…';
+  try{const t=(await gemCall([{text:'次の会議の議事録を、下の「修正の希望」どおりに直してください。希望にないところは変えない。区切り行(=====摘要===== など)・見出し・箇条書きの形は保つ。文字起こしにないことは足さない。直した議事録の全文だけを出力。\n\n■ 修正の希望\n'+ask+'\n\n■ 今の議事録\n'+d.summary+'\n\n■ 参考:文字起こし\n'+txLines(d).slice(-20000)}],false,120000)).trim();
+    if(!t)throw new Error('空の回答でした');d.summary=t;if(doc===d){$('#dSummary').value=t;await put(d)}$('#revTx').value='';$('#revNote').textContent='✓ 直しました。② を確認してください'}
+  catch(e){$('#revNote').textContent='失敗しました:'+e.message}finally{$('#revBtn').disabled=false}};
 function audioFile(){const e=extOf(doc.audio.type);return new File([doc.audio],safe(doc.name)+'.'+e,{type:doc.audio.type||'audio/webm'})}
 $('#dlAudio').onclick=()=>{const f=audioFile();download(f,f.name)};
 $('#shareAudio').onclick=async()=>{const f=audioFile();
