@@ -51,7 +51,7 @@ import numpy as np
 BASE = Path(__file__).resolve().parent
 MODEL_DIR = BASE / "models"
 REC_DIR = BASE / "recordings"
-BUILD = "2026-11-25a"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
+BUILD = "2026-11-26b"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
 # 一鍵更新:新版放在這裡(Josh 合併 PR 才會發布)
 UPDATE_BASE = "https://raw.githubusercontent.com/lee09930239-dotcom/kaigi-mobile/main/pc/"
 WRITE_LOG = BASE / "meta_writes.log"
@@ -991,7 +991,7 @@ class App:
 
     def update_meta(self, mid, data):
         m = self.meeting.refresh() if self.meeting and self.meeting.id == mid else Meeting(REC_DIR / mid)
-        for k in ("name", "notes", "notes_after", "speakers", "summary", "out_lang", "length", "style_note"):
+        for k in ("name", "notes", "notes_after", "speakers", "summary", "out_lang", "length", "style_note", "digests"):
             if k in data:
                 if k == "summary" and data[k] != m.meta.get("summary"):
                     m.meta.pop("zh", None)  # 手動改了議事錄,中文確認版要重做
@@ -2293,7 +2293,35 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
 .primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1d2329;color:#fff;padding:10px 18px;border-radius:8px;font-size:14px;z-index:9}
-@media (max-width:800px){.main{grid-template-columns:1fr}.side{display:none}}
+/* 現在の要点(大) + 字幕(小) */
+.main{grid-template-columns:var(--c1,minmax(0,1.35fr)) 7px minmax(160px,1fr) 7px var(--c3,280px)}
+.gut{cursor:col-resize;background:var(--line);opacity:.5;touch-action:none}.gut:hover,.gut.on{opacity:1;background:var(--accent)}
+#digest{overflow-y:auto;padding:16px 18px;border-right:1px solid var(--line);background:#fbfcfe}
+.dg-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.dg-head h3{margin:0;font-size:18px;flex:1;white-space:nowrap}
+.dg-head .small{font-size:12px;color:var(--muted)}
+.dg-head select{width:auto;padding:5px 8px;font-size:13px}
+.dg-head button{padding:5px 10px;font-size:13px}
+.dg-box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:12px}
+.dg-box h4{margin:0 0 6px;font-size:15px;color:var(--muted)}
+.dg-box ul{margin:0;padding-left:22px}
+.dg-box li{font-size:19px;line-height:1.55;margin:2px 0}
+.dg-box .none{font-size:14px;color:var(--muted)}
+.dg-box.direction{border-left:6px solid var(--accent)}
+.dg-box.agreed{border-left:6px solid var(--go)}
+.dg-box.open{border-left:6px solid #d97706}
+.dg-box.now li{font-size:16px}
+.dg-hist summary{font-size:13px}
+.dg-hist .item{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding:6px 0}
+.dg-wait{color:var(--muted);text-align:center;margin-top:12vh;line-height:1.8}
+#log{padding:10px}
+#log .row{padding:6px 10px;margin-bottom:6px;border-left-width:4px}
+#log .src{font-size:14px;line-height:1.45}
+#log .zh{font-size:13px;line-height:1.4}
+#log .meta{font-size:11px}
+#log .empty{margin-top:10vh;font-size:13px}
+
+@media (max-width:800px){.main{grid-template-columns:1fr!important}.gut{display:none}.side{display:none}#digest{border-right:none;max-height:55vh}}
 button:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(1)}
 button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e8e3e!important}
 .txnote{color:#b26a00;font-weight:600;margin:6px 0}
@@ -2344,7 +2372,17 @@ button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e
     <button id="stopBtn" class="big stop">■ 終了</button>
   </div>
   <div class="main">
+    <div id="digest">
+      <div class="dg-head"><h3 id="dgTitle">📌 現在の要点</h3>
+        <span class="small" id="dgStatus"></span>
+        <select id="dgLang" title="要点の言語"><option value="ja">日本語</option><option value="zh">中文</option><option value="en">English</option></select>
+        <select id="dgInt" title="自動でまとめる間隔"><option value="120">2 分ごと</option><option value="180">3 分ごと</option><option value="300">5 分ごと</option><option value="600">10 分ごと</option><option value="0">自動なし</option></select>
+        <button id="dgNow">今すぐまとめる</button></div>
+      <div id="dgBody"></div>
+    </div>
+    <div class="gut" data-g="1" title="ドラッグで幅を変更(ダブルクリックで元に戻す)"></div>
     <div id="log"><div class="empty" id="emptyMsg">聞き取り中… 話し始めるとここに字幕が出ます</div></div>
+    <div class="gut" data-g="2" title="ドラッグで幅を変更(ダブルクリックで元に戻す)"></div>
     <div class="side">
       <b>話者</b>
       <div id="spkList"></div>
@@ -2487,7 +2525,77 @@ function showRec(m){
   $('#recName').value=m.name;$('#notes').value=m.notes||'';(m.lines||[]).forEach(addLine);
   t0=Date.now()-(state.elapsed||0)*1000;clearInterval(timerId);timerId=setInterval(()=>$('#timer').textContent=fmt((Date.now()-t0)/1000),500);
   $('#home').classList.add('hidden');$('#rec').classList.remove('hidden');renderSpk();setPaused(!!state.paused);
+  digests=m.digests||[];dgLastId=digests.length?(digests[digests.length-1].upto||0):0;dgLast=Date.now();dgState='';
+  api('/api/gemini').then(g=>{gem=g;renderDigest()}).catch(()=>{});renderDigest();
 }
+// ---- 現在の要点:数分ごとに Gemini で「会議の流れ・合意事項・未決事項・今の話題」をまとめる ----
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+let digests=[],dgState='',dgMsg='',dgLastId=0,dgLast=Date.now(),dgPaused=false,dgLang=LS.get('dgLang','ja'),dgInt=+LS.get('dgInt','180');
+const DG={zh:{title:'📌 目前重點',direction:'🧭 會議走向',agreed:'✅ 目前共識',open:'❓ 還沒結論・要確認',now:'💬 現在在談',none:'(還沒有)',hist:'之前的整理',
+    wait:'開始說話後,每隔幾分鐘會在這裡整理「會議走向」和「目前共識」。',upd:'更新',next:'下次',run:'整理中…',tr:'翻譯中…',name:'台灣繁體中文'},
+  ja:{title:'📌 現在の要点',direction:'🧭 会議の流れ',agreed:'✅ 合意事項',open:'❓ 未決・要確認',now:'💬 今の話題',none:'(まだなし)',hist:'過去の要点',
+    wait:'話し始めると、数分ごとにここに「会議の流れ」と「合意事項」をまとめます。<br>すぐ見たいときは「今すぐまとめる」を押してください。',upd:'更新',next:'次回',run:'まとめ中…',tr:'翻訳中…',name:'日本語'},
+  en:{title:'📌 Key points so far',direction:'🧭 Direction',agreed:'✅ Agreed',open:'❓ Open / to confirm',now:'💬 Now discussing',none:'(none yet)',hist:'Earlier summaries',
+    wait:'Once people start talking, the direction and agreements will be summarized here every few minutes.',upd:'updated',next:'next',run:'Summarizing…',tr:'Translating…',name:'English'}};
+const DG_KEYS=['direction','agreed','open','now'];
+const DG_SCHEMA={type:'OBJECT',properties:Object.fromEntries(DG_KEYS.map(k=>[k,{type:'ARRAY',items:{type:'STRING'}}])),required:DG_KEYS};
+function dgData(it,lang){return it.lang===lang?it.data:(it.tr&&it.tr[lang])||null}
+function hm(d){return d.toTimeString().slice(0,5)}
+// ---- 3 つの欄の幅:境目の線をドラッグ(幅はこのパソコンに保存) ----
+(function(){const mn=document.querySelector('#rec .main');let c1=0,c3=0;
+  try{c1=+localStorage.getItem('colW1')||0;c3=+localStorage.getItem('colW3')||0}catch(e){}
+  const apply=()=>{mn.style.setProperty('--c1',c1?c1+'px':'');mn.style.setProperty('--c3',c3?c3+'px':'');if(!c1)mn.style.removeProperty('--c1');if(!c3)mn.style.removeProperty('--c3')};
+  const save=()=>{try{localStorage.setItem('colW1',c1||'');localStorage.setItem('colW3',c3||'')}catch(e){}};apply();
+  document.querySelectorAll('#rec .gut').forEach(g=>{
+    g.onpointerdown=e=>{e.preventDefault();g.setPointerCapture(e.pointerId);g.classList.add('on');
+      const r=mn.getBoundingClientRect(),w1=document.querySelector('#digest').getBoundingClientRect().width,w3=document.querySelector('#rec .side').getBoundingClientRect().width;
+      g.onpointermove=ev=>{if(g.dataset.g==='1')c1=Math.round(Math.max(200,Math.min(r.width-w3-14-160,ev.clientX-r.left)));
+        else{c3=Math.round(Math.max(140,Math.min(r.width-w1-14-160,r.right-ev.clientX)));if(!c1)c1=Math.round(w1)}apply()}};
+    g.onpointerup=g.onpointercancel=e=>{g.onpointermove=null;g.classList.remove('on');save()};
+    g.ondblclick=()=>{c1=0;c3=0;apply();save()}})})();
+function renderDigest(){const L=DG[dgLang]||DG.ja;$('#dgLang').value=dgLang;$('#dgInt').value=String(dgInt);$('#dgTitle').textContent=L.title;
+  const last=digests[digests.length-1];
+  let st=dgState==='running'?'<span class="spin"></span>'+L.run:dgState==='translating'?'<span class="spin"></span>'+L.tr:dgState==='error'?esc(dgMsg):'';
+  if(!st&&last)st=`${last.time} ${L.upd}`+(dgInt?`・${L.next} ${hm(new Date(dgLast+dgInt*1000))}`:'');
+  $('#dgStatus').innerHTML=st;$('#dgNow').disabled=dgState==='running'||!gem.key;
+  if(!gem.key){$('#dgBody').innerHTML='<div class="dg-wait">Gemini の API キーを設定すると、数分ごとにここへ「会議の流れ」と「合意事項」をまとめます。<br><a href="#" class="openGem">Gemini を設定する</a></div>';
+    $('#dgBody').querySelectorAll('.openGem').forEach(a=>a.onclick=e=>{e.preventDefault();document.querySelector('.openGem:not(#dgBody .openGem)')?.click()});return}
+  if(!last){$('#dgBody').innerHTML=`<div class="dg-wait">${L.wait}</div>`;return}
+  const d=dgData(last,dgLang)||last.data;
+  const box=k=>`<div class="dg-box ${k}"><h4>${L[k]}</h4>${(d[k]||[]).length?'<ul>'+d[k].map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<div class="none">'+L.none+'</div>'}</div>`;
+  const hist=digests.slice(0,-1).reverse().map(it=>{const x=dgData(it,dgLang)||it.data;return `<div class="item"><b>${it.time}</b> ${esc((x.direction||[]).join(' / '))}${(x.agreed||[]).length?'<br>✅ '+esc(x.agreed.join(' / ')):''}</div>`}).join('');
+  $('#dgBody').innerHTML=DG_KEYS.map(box).join('')+(hist?`<details class="dg-hist"><summary>${L.hist}(${digests.length-1})</summary>${hist}</details>`:'');
+}
+function dgClean(o){const r={};DG_KEYS.forEach(k=>{const v=o&&o[k];r[k]=(Array.isArray(v)?v:v?[v]:[]).map(x=>String(x).trim()).filter(Boolean)});return r}
+function dgJson(t){return JSON.parse(t.replace(/^```(json)?|```$/g,'').trim())}
+async function runDigest(force){if(!cur||!gem.key||dgState==='running')return;
+  const id=cur,news=Object.values(lines).filter(l=>l.id>dgLastId&&l.text).sort((a,b)=>a.id-b.id);
+  const prev=digests.length?digests[digests.length-1].data:null;dgLast=Date.now();
+  if(!news.length&&!force)return;
+  let tx=news.map(l=>`[${(l.time||'').slice(0,5)}] ${spkName(l.sid)}:${l.text}`).join('\n');if(tx.length>6000)tx=tx.slice(-6000);
+  const L=DG[dgLang]||DG.ja;dgState='running';renderDigest();
+  const p='あなたは会議の記録係です。「前回の要点」と「最新の文字起こし」(音声認識の結果で誤字あり)から、更新した要点を JSON で出してください。\n'+
+    '- direction: 会議の流れ。1〜2 文で、何の話から何の話に移り、今どこへ向かっているか\n'+
+    '- agreed: ここまでに合意・決定したこと。前回の分は覆らない限り残し、新しいものを足す。数字・日付・担当を具体的に\n'+
+    '- open: まだ結論が出ていない・確認や回答が必要なこと。解決したものは消す\n'+
+    '- now: 今話している話題(1 つ)\n'+
+    `各項目は短い 1 文。文字起こしにないことは書かない。なければ空の配列。すべて${L.name}で書く。\n\n`+
+    `会議名:${$('#recName').value}\n`+($('#notes').value.trim()?`メモ:${$('#notes').value.trim().slice(-600)}\n`:'')+
+    (prev?'前回の要点:'+JSON.stringify(prev)+'\n':'')+'最新の文字起こし:\n'+(tx||'(この間、新しい発言なし)');
+  try{const data=dgClean(dgJson(await gemCall(gem.key,p,60000,null,DG_SCHEMA)));if(cur!==id)return;
+    if(news.length)dgLastId=news[news.length-1].id;
+    const it={n:digests.length+1,time:hm(new Date()),t:Math.round((Date.now()-t0)/1000),lang:dgLang,upto:dgLastId,data};digests.push(it);dgState='';api('/api/meetings/'+id,{digests}).catch(()=>{})}
+  catch(e){dgState='error';dgMsg='要点のまとめに失敗:'+e.message}
+  dgLast=Date.now();renderDigest()}
+async function dgTranslate(){const it=digests[digests.length-1];if(!it||!gem.key||dgData(it,dgLang)||dgState==='running')return renderDigest();
+  const id=cur,lang=dgLang;dgState='translating';renderDigest();
+  try{const out=dgClean(dgJson(await gemCall(gem.key,`次の JSON の各文字列を自然な${DG[lang].name}に訳してください。構造と項目数はそのまま、JSON だけを出力。\n`+JSON.stringify(it.data),30000,null,DG_SCHEMA)));
+    (it.tr=it.tr||{})[lang]=out;dgState='';if(cur===id)api('/api/meetings/'+id,{digests}).catch(()=>{})}
+  catch(e){dgState='error';dgMsg='翻訳に失敗:'+e.message}renderDigest()}
+$('#dgLang').onchange=()=>{dgLang=$('#dgLang').value;LS.set('dgLang',dgLang);dgTranslate()};
+$('#dgInt').onchange=()=>{dgInt=+$('#dgInt').value;LS.set('dgInt',dgInt);dgLast=Date.now();renderDigest()};
+$('#dgNow').onclick=()=>runDigest(true);
+setInterval(()=>{if(cur&&!dgPaused&&dgInt>0&&Date.now()-dgLast>=dgInt*1000)runDigest(false)},5000);
 function addLine(r){
   const old=lines[r.id]||{};const L=lines[r.id]={...old,...r};
   let el=document.getElementById('L'+r.id);
@@ -2511,7 +2619,7 @@ function autosave(){clearTimeout(saveT);$('#saved').textContent='…';saveT=setT
   try{await api('/api/meetings/'+cur,{name:$('#recName').value,notes:$('#notes').value});$('#saved').textContent='保存しました '+new Date().toLocaleTimeString()}
   catch(e){$('#saved').textContent='保存できません:'+e.message}},800)}
 $('#notes').oninput=autosave;$('#recName').oninput=autosave;
-function setPaused(p){$('#pauseBtn').textContent=p?'▶ 再開':'⏸ 一時停止';$('#pausedTag').classList.toggle('hidden',!p);document.querySelector('#rec .dot').classList.toggle('off',p)}
+function setPaused(p){dgPaused=p;$('#pauseBtn').textContent=p?'▶ 再開':'⏸ 一時停止';$('#pausedTag').classList.toggle('hidden',!p);document.querySelector('#rec .dot').classList.toggle('off',p)}
 $('#pauseBtn').onclick=async()=>{const want=!$('#pauseBtn').textContent.includes('再開');$('#pauseBtn').disabled=true;
   try{const r=await api('/api/pause',{paused:want});setPaused(r.paused);toast(r.paused?'一時停止しました。「再開」で同じ会議の続きを録音します':'録音を再開しました')}
   catch(e){toast('失敗しました:'+e.message)}$('#pauseBtn').disabled=false};
@@ -2538,10 +2646,10 @@ async function openDone(id,justEnded){doneId=id;const m=await api('/api/meetings
 let gem={configured:false,url:'',key:''},gemBusy=false;
 const GEM_MODELS=['gemini-flash-latest','gemini-2.5-flash'];
 // Gemini はブラウザから直接呼ぶ(ブラウザと同じネットワーク設定で接続できる)
-async function gemCall(key,text,ms,audio){let last='';const parts0=[{text}];if(audio)parts0.unshift({inline_data:{mime_type:audio.mime,data:audio.data}});
+async function gemCall(key,text,ms,audio,schema){let last='';const parts0=[{text}];if(audio)parts0.unshift({inline_data:{mime_type:audio.mime,data:audio.data}});
   for(const mdl of GEM_MODELS){const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),ms);let r;
     try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+mdl+':generateContent',{method:'POST',signal:ac.signal,
-      headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({contents:[{role:'user',parts:parts0}],generationConfig:{temperature:0.3}})})}
+      headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({contents:[{role:'user',parts:parts0}],generationConfig:schema?{temperature:0.2,responseMimeType:'application/json',responseSchema:schema}:{temperature:0.3}})})}
     catch(e){throw new Error(e.name==='AbortError'?'Google から '+Math.round(ms/1000)+' 秒応答がありません。もう一度お試しください':'Google に接続できません('+e.message+')')}
     finally{clearTimeout(tm)}
     const j=await r.json().catch(()=>({}));const msg=(j.error&&j.error.message)||String(r.status);
