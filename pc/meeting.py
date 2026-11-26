@@ -67,6 +67,13 @@ MT_MODEL = "facebook/nllb-200-distilled-600M"
 NLLB_LANG = {"en": "eng_Latn", "zh": "zho_Hant", "yue": "zho_Hant"}  # 中国語・英語 → 日本語(日本語は訳さない)
 LANG_LABEL = {"ja": "日", "zh": "中", "yue": "広", "en": "英", "ko": "韓"}
 
+QWEN_REPO = "Qwen/Qwen2.5-3B-Instruct-GGUF"
+QWEN_FILE = "qwen2.5-3b-instruct-q4_k_m.gguf"
+LLAMA_PORT = 8767  # 社内用ツール(8766)とぶつからないように
+LLAMA_API = "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest"
+LLAMA_PINNED = ("b6500", "b6000", "b5500")
+QWEN_IDLE_SLEEP = 1200  # 会議が終わって 20 分使わなければ止める(メモリと CPU を空ける)
+
 CAPTURE_RATE = 48000
 ASR_RATE = 16000
 CHUNK = 4800  # 0.1 秒 @ 48kHz
@@ -591,6 +598,126 @@ def default_speaker_name(sid):
     return sid
 
 
+class QwenTranslator:
+    """このパソコンだけで要点をまとめる AI(Qwen)。llama-server を低優先度で動かす"""
+
+    def __init__(self, threads=4):
+        import opencc
+
+        self.s2t = opencc.OpenCC("s2twp")
+        self.url = f"http://127.0.0.1:{LLAMA_PORT}"
+        self.proc = None
+        self.lat = 0.0  # 最近的翻譯秒數(平滑)
+        if not self.healthy():
+            exe = self.ensure_server()
+            model = self.ensure_model()
+            log = open(MODEL_DIR / "llama.log", "ab")
+            # 低優先權:電腦忙的時候 Windows 會先讓字幕(辨識)跑,Qwen 只用剩下的 CPU
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
+            self.proc = subprocess.Popen([str(exe), "-m", str(model), "--host", "127.0.0.1", "--port", str(LLAMA_PORT),
+                                          "-t", str(threads), "-c", "4096"],
+                                         stdout=log, stderr=log, creationflags=flags)
+            atexit.register(self.close)
+            for _ in range(240):
+                if self.proc.poll() is not None:
+                    raise RuntimeError("llama-server 啟動失敗,詳情見 models/llama.log")
+                if self.healthy():
+                    break
+                time.sleep(0.5)
+            else:
+                raise RuntimeError("llama-server 2 分鐘內沒有啟動")
+
+    def close(self):
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+
+    def healthy(self):
+        try:
+            with urllib.request.urlopen(self.url + "/health", timeout=2) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    @staticmethod
+    def ensure_server():
+        d = MODEL_DIR / "llama"
+        found = list(d.rglob("llama-server.exe")) if d.exists() else []
+        if found:
+            return found[0]
+        # 找最近幾個版本裡「Windows、CPU、x64」的 zip(新舊版命名不同:cpu-x64 / avx2-x64)
+        seen, cands = [], []
+        try:
+            req = urllib.request.Request(LLAMA_API.replace("/latest", "?per_page=15"),
+                                         headers={"User-Agent": "kaigi-jimaku"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                rels = json.loads(r.read().decode("utf-8"))
+            for rel in rels:
+                names = [a.get("name", "") for a in rel.get("assets", [])]
+                seen.append(f"{rel.get('tag_name')}: {', '.join(n for n in names if 'win' in n.lower())}")
+                for pat in (r"bin-win-cpu-x64\.zip$", r"bin-win-avx2-x64\.zip$", r"win.*cpu.*x64.*\.zip$"):
+                    hit = [a for a in rel.get("assets", []) if re.search(pat, a.get("name", ""), re.I)]
+                    if hit:
+                        cands.append((hit[0]["name"], hit[0]["browser_download_url"]))
+                        break
+                if cands:
+                    break
+        except Exception as e:
+            seen.append(f"GitHub API 失敗:{e}")
+            print(f"GitHub API 無法使用({e}),改用固定版本", flush=True)
+        for tag in LLAMA_PINNED:  # 找不到時用確定存在過的版本
+            n = f"llama-{tag}-bin-win-cpu-x64.zip"
+            cands.append((n, f"https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{n}"))
+        errs = []
+        for name, url in cands:
+            z = MODEL_DIR / name
+            try:
+                download(url, z)
+                break
+            except Exception as e:
+                errs.append(f"{url} → {e}")
+        else:
+            raise RuntimeError("llama.cpp 下載失敗\n" + "\n".join(errs) + "\n看到的版本:\n" + "\n".join(seen[:15]))
+        import zipfile
+
+        d.mkdir(exist_ok=True)
+        with zipfile.ZipFile(z) as f:
+            f.extractall(d)
+        z.unlink()
+        found = list(d.rglob("llama-server.exe"))
+        if not found:
+            raise RuntimeError("llama.cpp 壓縮檔裡沒有 llama-server.exe")
+        return found[0]
+
+    @staticmethod
+    def ensure_model():
+        f = MODEL_DIR / QWEN_FILE
+        if f.exists():
+            return f
+        print("下載 Qwen 翻譯模型(約 2GB,只有第一次)...", flush=True)
+        from huggingface_hub import hf_hub_download
+
+        return Path(hf_hub_download(QWEN_REPO, QWEN_FILE, local_dir=str(MODEL_DIR)))
+
+    def chat(self, sys_msg, user, max_tokens=400, schema=None, timeout=240):
+        body = {"messages": [{"role": "system", "content": sys_msg}, {"role": "user", "content": user}],
+                "temperature": 0.2, "max_tokens": max_tokens, "cache_prompt": True}
+        if schema:
+            body["json_schema"] = schema  # llama-server 會限制輸出一定符合這個格式
+        req = urllib.request.Request(self.url + "/v1/chat/completions", data=json.dumps(body).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))["choices"][0]["message"]["content"].strip()
+
+
+def llama_schema(x):
+    """Gemini 形式(型が大文字)の schema → llama-server 形式"""
+    if isinstance(x, dict):
+        return {k: (v.lower() if k == "type" else llama_schema(v)) for k, v in x.items()}
+    if isinstance(x, list):
+        return [llama_schema(v) for v in x]
+    return x
+
+
 class App:
     def __init__(self, threads, translate):
         self.hub = Hub()
@@ -609,6 +736,12 @@ class App:
         self.summarizing = set()
         self.checking = set()
         self.clip = ClipWatch(self)
+        self.qwen = None
+        self.qwen_status = "loading"  # loading / ready / failed / sleep
+        self.qwen_lock = threading.Lock()
+        self.audio_q = None
+        self.n_tracks = 1
+        self.idle_since = 0.0
         self.lock = threading.Lock()
         self.notion_lock = threading.Lock()
         import soundcard as sc
@@ -633,6 +766,7 @@ class App:
         except Exception as e:
             self.set_status("error", f"音声認識モデルを読み込めませんでした:{e}\n→ 黒い画面を閉じて、models フォルダを削除してから start_*.bat をもう一度起動してください")
             return
+        threading.Thread(target=self.load_qwen, daemon=True).start()
         if self.want_translate:
             try:
                 print("翻訳モデルを読み込み中(1分ほど。初回のみ約 2.5GB ダウンロード)...", flush=True)
@@ -642,6 +776,52 @@ class App:
                 print(f"翻訳モデルを読み込めませんでした。原文のみ表示します:{e}")
                 self.translator_status = "failed"
             self.publish_state()
+
+    def load_qwen(self):
+        if not self.qwen_lock.acquire(blocking=False):
+            return
+        try:
+            if self.qwen:
+                return
+            self.qwen_status = "loading"
+            print("ローカル AI(要点まとめ用)を起動中…(初回のみ約 2GB ダウンロード)", flush=True)
+            self.qwen = QwenTranslator()
+            self.qwen_status = "ready"
+            print("ローカル AI を起動しました", flush=True)
+        except Exception as e:
+            self.qwen_status = "failed"
+            print(f"ローカル AI を起動できませんでした(Gemini は使えます):{e}", flush=True)
+        finally:
+            self.qwen_lock.release()
+            self.publish_state()
+
+    def qwen_sleep_later(self, since):
+        time.sleep(QWEN_IDLE_SLEEP)
+        if self.status == "idle" and self.idle_since == since and self.qwen:
+            q, self.qwen = self.qwen, None
+            self.qwen_status = "sleep"
+            q.close()
+            print("会議がないのでローカル AI を休ませます(録音開始で自動で起動)", flush=True)
+            self.publish_state()
+
+    def caption_lag(self):
+        q = self.audio_q
+        return q.qsize() * CHUNK / CAPTURE_RATE / self.n_tracks if q else 0.0
+
+    def llm(self, d):
+        """ブラウザからのローカル AI 呼び出し。字幕が遅れているときは断る(字幕が最優先)"""
+        q = self.qwen
+        if not q or not q.healthy():
+            if self.qwen_status in ("sleep", "failed") or (q and not q.healthy()):
+                self.qwen = None
+                threading.Thread(target=self.load_qwen, daemon=True).start()
+            raise RuntimeError("ローカル AI を準備中です")
+        if self.caption_lag() > 3:
+            raise RuntimeError("字幕の処理を優先しています。少しあとでまとめます")
+        sch = d.get("schema")
+        out = q.chat(str(d.get("system") or "JSON だけを出力してください。"), str(d.get("user", ""))[:6000],
+                     max_tokens=int(d.get("max_tokens") or 450), schema=llama_schema(sch) if sch else None, timeout=180)
+        return out
 
     def set_status(self, status, message):
         self.status = status
@@ -653,6 +833,7 @@ class App:
             "status": self.status,
             "message": self.message,
             "translator": self.translator_status,
+            "local_ai": self.qwen_status,
         }
         if self.meeting:
             s["meeting"] = {
@@ -716,6 +897,9 @@ class App:
                 m.meta["screenshots"] = True
                 m.save_meta()
                 threading.Thread(target=self.run_screenshots, args=(m.dir / "shots", self.stop_evt, self.started_at), daemon=True).start()
+            self.audio_q, self.n_tracks = audio_q, max(1, len(tracks))
+            if self.qwen is None and self.qwen_status in ("sleep", "failed"):
+                threading.Thread(target=self.load_qwen, daemon=True).start()
             self.proc = threading.Thread(target=self.process, args=(m, audio_q, now), daemon=True)
             self.proc.start()
             self.set_status("recording", "")
@@ -761,6 +945,9 @@ class App:
             self.meeting.meta["duration"] = round(time.time() - self.started_at)
             self.meeting.save_meta()
             print(f"停止しました。録音と文字起こしの場所:{self.meeting.dir}")
+            self.audio_q = None
+            self.idle_since = time.time()
+            threading.Thread(target=self.qwen_sleep_later, args=(self.idle_since,), daemon=True).start()
             self.set_status("idle", "")
         if claude_configured():
             threading.Thread(target=self.summarize, args=(self.meeting.id,), daemon=True).start()
@@ -991,7 +1178,7 @@ class App:
 
     def update_meta(self, mid, data):
         m = self.meeting.refresh() if self.meeting and self.meeting.id == mid else Meeting(REC_DIR / mid)
-        for k in ("name", "notes", "notes_after", "speakers", "summary", "out_lang", "length", "style_note", "digests"):
+        for k in ("name", "notes", "notes_after", "speakers", "summary", "out_lang", "length", "style_note", "digests", "turns"):
             if k in data:
                 if k == "summary" and data[k] != m.meta.get("summary"):
                     m.meta.pop("zh", None)  # 手動改了議事錄,中文確認版要重做
@@ -2160,6 +2347,11 @@ def make_handler(app):
                                          "text/plain; charset=utf-8")
                     except RuntimeError as e:
                         return self.send(400, {"error": str(e)})
+                if path == "/api/llm":
+                    try:
+                        return self.send(200, {"text": app.llm(self.body())})
+                    except Exception as e:
+                        return self.send(400, {"error": str(e)})
                 if path == "/api/gemini":
                     d = self.body()
                     key = str(d.get("key", "")).strip()
@@ -2313,6 +2505,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .dg-box.now li{font-size:16px}
 .dg-hist summary{font-size:13px}
 .dg-hist .item{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding:6px 0}
+#dgTurn{margin:0 0 12px;padding:10px 12px;border:2px solid #2563eb;border-radius:10px;background:#eff6ff}#dgTurn .tw{font-size:12px;color:#475569;margin-bottom:4px}#dgTurn .tc{font-size:19px;font-weight:bold;line-height:1.45}#dgTurn ul{margin:6px 0 0 18px;padding:0}#dgTurn li{margin:2px 0}
 .dg-wait{color:var(--muted);text-align:center;margin-top:12vh;line-height:1.8}
 #log{padding:10px}
 #log .row{padding:6px 10px;margin-bottom:6px;border-left-width:4px}
@@ -2367,7 +2560,7 @@ button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e
       ・会議の内容(文字・音声)が Google に送られます。<br>
       ・無料版では、送った内容が Google のサービス改善に使われることがあります。<br>
       ・社外秘の会議では使わないなど、会社のルールを確認してからお使いください。</div>
-    <div class="note">使わない場合も、字幕と翻訳はこのパソコンの中だけで動きます(議事録は ChatGPT などにコピーして作成できます)。</div>
+    <div class="note">使わない場合も、字幕・翻訳・会議中の要点まとめは、このパソコンの中だけで動きます(議事録は ChatGPT などにコピーして作成できます)。Gemini を設定すると、要点がより速く正確になり、うまくいかないときは自動でこのパソコンの AI に切り替わります。</div>
     <button class="openGem" style="margin-top:10px">内容を確認しました。Gemini を設定する</button>
   </details>
 </div>
@@ -2535,7 +2728,7 @@ function showRec(m){
   $('#recName').value=m.name;$('#notes').value=m.notes||'';(m.lines||[]).forEach(addLine);
   t0=Date.now()-(state.elapsed||0)*1000;clearInterval(timerId);timerId=setInterval(()=>$('#timer').textContent=fmt((Date.now()-t0)/1000),500);
   $('#home').classList.add('hidden');$('#rec').classList.remove('hidden');renderSpk();setPaused(!!state.paused);
-  digests=m.digests||[];dgLastId=digests.length?(digests[digests.length-1].upto||0):0;dgLast=Date.now();dgState='';
+  digests=m.digests||[];turns=m.turns||[];turnSt=null;turnRun='';lastLineAt=0;dgLastId=digests.length?(digests[digests.length-1].upto||0):0;dgLast=Date.now();dgState='';
   api('/api/gemini').then(g=>{gem=g;renderDigest()}).catch(()=>{});renderDigest();
 }
 // ---- 現在の要点:数分ごとに Gemini で「会議の流れ・合意事項・未決事項・今の話題」をまとめる ----
@@ -2566,23 +2759,56 @@ function hm(d){return d.toTimeString().slice(0,5)}
 function renderDigest(){const L=DG[dgLang]||DG.ja;$('#dgLang').value=dgLang;$('#dgInt').value=String(dgInt);$('#dgTitle').textContent=L.title;
   const last=digests[digests.length-1];
   let st=dgState==='running'?'<span class="spin"></span>'+L.run:dgState==='translating'?'<span class="spin"></span>'+L.tr:dgState==='error'?esc(dgMsg):'';
-  if(!st&&last)st=`${last.time} ${L.upd}`+(dgInt?`・${L.next} ${hm(new Date(dgLast+dgInt*1000))}`:'');
-  $('#dgStatus').innerHTML=st;$('#dgNow').disabled=dgState==='running'||!gem.key;
-  if(!gem.key){$('#dgBody').innerHTML='<div class="dg-wait">Gemini の API キーを設定すると、数分ごとにここへ「会議の流れ」と「合意事項」をまとめます。<br><a href="#" class="openGem">Gemini を設定する</a></div>';
+  if(!st&&last)st=`${last.time} ${L.upd}${last.via==='cloud'?' ☁':last.via==='local'?' 💻':''}`+(dgInt?`・${L.next} ${hm(new Date(dgLast+dgInt*1000))}`:'');
+  $('#dgStatus').innerHTML=st;$('#dgNow').disabled=dgState==='running'||(!gem.key&&!localReady());
+  if(!gem.key&&!localReady()){$('#dgBody').innerHTML=turnHtml()+'<div class="dg-wait">'+(state.local_ai==='failed'?'ローカル AI を起動できませんでした。':'<span class="spin"></span>このパソコンの AI を準備中です(初回のみ約 2GB ダウンロード)。')+'<br>準備ができると、数分ごとにここへ「会議の流れ」と「合意事項」をまとめます。<br>Gemini(任意)を設定すると、より速く正確になります:<a href="#" class="openGem">Gemini を設定する</a></div>';
     $('#dgBody').querySelectorAll('.openGem').forEach(a=>a.onclick=e=>{e.preventDefault();document.querySelector('.openGem:not(#dgBody .openGem)')?.click()});return}
-  if(!last){$('#dgBody').innerHTML=`<div class="dg-wait">${L.wait}</div>`;return}
+  if(!last){$('#dgBody').innerHTML=turnHtml()+`<div class="dg-wait">${L.wait}</div>`;return}
   const d=dgData(last,dgLang)||last.data;
   const box=k=>`<div class="dg-box ${k}"><h4>${L[k]}</h4>${(d[k]||[]).length?'<ul>'+d[k].map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<div class="none">'+L.none+'</div>'}</div>`;
   const hist=digests.slice(0,-1).reverse().map(it=>{const x=dgData(it,dgLang)||it.data;return `<div class="item"><b>${it.time}</b> ${esc((x.direction||[]).join(' / '))}${(x.agreed||[]).length?'<br>✅ '+esc(x.agreed.join(' / ')):''}</div>`}).join('');
-  $('#dgBody').innerHTML=DG_KEYS.map(box).join('')+(hist?`<details class="dg-hist"><summary>${L.hist}(${digests.length-1})</summary>${hist}</details>`:'');
+  $('#dgBody').innerHTML=turnHtml()+DG_KEYS.map(box).join('')+(hist?`<details class="dg-hist"><summary>${L.hist}(${digests.length-1})</summary>${hist}</details>`:'');
 }
+// ---- AI の振り分け:Gemini が設定済みならまず Gemini、失敗・未設定ならこのパソコンのローカル AI ----
+let gemDown=0,lastLineAt=0,turns=[],turnRun='',turnSt=null,turnBusy=false;
+function localReady(){return state.local_ai==='ready'}
+async function aiCall(prompt,schema,ms,localPrompt,maxTok){
+  if(gem.key&&Date.now()>gemDown){try{return {text:await gemCall(gem.key,prompt,ms,null,schema),via:'cloud'}}
+    catch(e){gemDown=Date.now()+(/無料枠|429/.test(e.message)?1800e3:120e3);console.log('Gemini 失敗 → ローカル',e.message)}}
+  const r=await api('/api/llm',{user:localPrompt||prompt,schema,max_tokens:maxTok||450});return {text:r.text,via:'local'}}
+// ---- さっきの発言:誰かが長く話して 3 秒止まったら、その段落を「結論 → 背景」でまとめる(通訳用) ----
+const TURN_MIN={zh:60,yue:60,ja:80,en:120};
+const TURN_SCHEMA={type:'OBJECT',properties:{conclusion:{type:'STRING'},background:{type:'ARRAY',items:{type:'STRING'}}},required:['conclusion','background']};
+function turnHtml(){const t=turns[turns.length-1];if(!t&&!turnRun)return'';
+  const run=turnRun?`<div class="tw"><span class="spin"></span>${esc(turnRun)} さんの発言をまとめ中…</div>`:'';if(!t)return `<div id="dgTurn">${run}</div>`;
+  const lab=(t.lang==='ja'?'→ 日本語の要点':'→ 中文重點')+(t.via==='cloud'?' ・☁':' ・💻');
+  return `<div id="dgTurn">${run}<div class="tw">🗣 ${esc(t.time)} ${esc(t.who)} さっきの発言 ${lab}</div><div class="tc">${esc(t.data.conclusion||'')}</div>${(t.data.background||[]).length?'<ul>'+t.data.background.slice(0,3).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':''}</div>`}
+async function turnTick(){if(!cur||dgPaused||turnBusy||!lastLineAt||Date.now()-lastLineAt<3000)return;if(!gem.key&&!localReady())return;
+  const all=Object.values(lines).filter(l=>l.text).sort((a,b)=>a.id-b.id);const run=[];
+  for(let i=all.length-1;i>=0;i--){const l=all[i];if(run.length&&(l.sid!==run[0].sid||l.lang!==run[0].lang))break;run.unshift(l);if(run.length>60)break}
+  if(!run.length)return;const lang=run[0].lang,n=run.reduce((a,l)=>a+l.text.length,0);if(!TURN_MIN[lang]||n<TURN_MIN[lang])return;
+  const k0=run[0].id,k1=run[run.length-1].id;if(turnSt&&turnSt[0]===k0&&(turnSt[1]===k1||n<turnSt[2]+30))return;
+  turnSt=[k0,k1,n];const id=cur,who=spkName(run[0].sid),tl=(lang==='zh'||lang==='yue')?'ja':'zh';
+  const text=run.map(l=>l.text).join('').slice(-1500),tn=tl==='ja'?'日本語':'台灣繁體中文';
+  const p=`あなたは会議通訳を手伝います。次は ${who} さんが今話し終えた発言です(音声認識の結果で誤字あり)。通訳がこれから相手側に伝えます。\n`+
+    `${tn}で JSON を出してください。conclusion = この発言の結論・一番伝えたいこと(1 文)。background = 結論を支える理由・背景・数字・条件(最大 3 つ、各 1 文、大事な順)。`+
+    `結論が先、背景はあと。通訳がそのまま話せる自然な文に。数字・日付・社名・型番は残す。発言にないことは書かない。\n\n発言:\n`+text;
+  turnBusy=true;turnRun=who;renderDigest();
+  try{const r=await aiCall(p,TURN_SCHEMA,15000,null,220);const d=dgJson(r.text);if(cur!==id)return;
+    const it={time:(run[0].time||'').slice(0,5),who,src:lang,lang:tl,via:r.via,from:k0,upto:k1,
+      data:{conclusion:String(d.conclusion||'').trim(),background:(d.background||[]).map(x=>String(x).trim()).filter(Boolean).slice(0,3)}};
+    if(turns.length&&turns[turns.length-1].from===k0){it.n=turns[turns.length-1].n;turns[turns.length-1]=it}else{it.n=turns.length+1;turns.push(it)}
+    api('/api/meetings/'+id,{turns}).catch(()=>{})}
+  catch(e){console.log('さっきの発言のまとめに失敗',e.message)}
+  finally{turnBusy=false;turnRun='';renderDigest()}}
+setInterval(turnTick,1000);
 function dgClean(o){const r={};DG_KEYS.forEach(k=>{const v=o&&o[k];r[k]=(Array.isArray(v)?v:v?[v]:[]).map(x=>String(x).trim()).filter(Boolean)});return r}
 function dgJson(t){return JSON.parse(t.replace(/^```(json)?|```$/g,'').trim())}
-async function runDigest(force){if(!cur||!gem.key||dgState==='running')return;
+async function runDigest(force){if(!cur||(!gem.key&&!localReady())||dgState==='running')return;
   const id=cur,news=Object.values(lines).filter(l=>l.id>dgLastId&&l.text).sort((a,b)=>a.id-b.id);
   const prev=digests.length?digests[digests.length-1].data:null;dgLast=Date.now();
   if(!news.length&&!force)return;
-  let tx=news.map(l=>`[${(l.time||'').slice(0,5)}] ${spkName(l.sid)}:${l.text}`).join('\n');if(tx.length>6000)tx=tx.slice(-6000);
+  const tx0=news.map(l=>`[${(l.time||'').slice(0,5)}] ${spkName(l.sid)}:${l.text}`).join('\n');let tx=tx0.slice(-6000);
   const L=DG[dgLang]||DG.ja;dgState='running';renderDigest();
   const p='あなたは会議の記録係です。「前回の要点」と「最新の文字起こし」(音声認識の結果で誤字あり)から、更新した要点を JSON で出してください。\n'+
     '- direction: 会議の流れ。1〜2 文で、何の話から何の話に移り、今どこへ向かっているか\n'+
@@ -2591,15 +2817,15 @@ async function runDigest(force){if(!cur||!gem.key||dgState==='running')return;
     '- now: 今話している話題(1 つ)\n'+
     `各項目は短い 1 文。文字起こしにないことは書かない。なければ空の配列。すべて${L.name}で書く。\n\n`+
     `会議名:${$('#recName').value}\n`+($('#notes').value.trim()?`メモ:${$('#notes').value.trim().slice(-600)}\n`:'')+
-    (prev?'前回の要点:'+JSON.stringify(prev)+'\n':'')+'最新の文字起こし:\n'+(tx||'(この間、新しい発言なし)');
-  try{const data=dgClean(dgJson(await gemCall(gem.key,p,60000,null,DG_SCHEMA)));if(cur!==id)return;
+    (prev?'前回の要点:'+JSON.stringify(prev)+'\n':'')+'最新の文字起こし:\n';
+  try{const r=await aiCall(p+(tx||'(この間、新しい発言なし)'),DG_SCHEMA,60000,p+(tx0.slice(-2000)||'(この間、新しい発言なし)'));const data=dgClean(dgJson(r.text));if(cur!==id)return;
     if(news.length)dgLastId=news[news.length-1].id;
-    const it={n:digests.length+1,time:hm(new Date()),t:Math.round((Date.now()-t0)/1000),lang:dgLang,upto:dgLastId,data};digests.push(it);dgState='';api('/api/meetings/'+id,{digests}).catch(()=>{})}
+    const it={n:digests.length+1,time:hm(new Date()),t:Math.round((Date.now()-t0)/1000),lang:dgLang,upto:dgLastId,data,via:r.via};digests.push(it);dgState='';api('/api/meetings/'+id,{digests}).catch(()=>{})}
   catch(e){dgState='error';dgMsg='要点のまとめに失敗:'+e.message}
   dgLast=Date.now();renderDigest()}
-async function dgTranslate(){const it=digests[digests.length-1];if(!it||!gem.key||dgData(it,dgLang)||dgState==='running')return renderDigest();
+async function dgTranslate(){const it=digests[digests.length-1];if(!it||(!gem.key&&!localReady())||dgData(it,dgLang)||dgState==='running')return renderDigest();
   const id=cur,lang=dgLang;dgState='translating';renderDigest();
-  try{const out=dgClean(dgJson(await gemCall(gem.key,`次の JSON の各文字列を自然な${DG[lang].name}に訳してください。構造と項目数はそのまま、JSON だけを出力。\n`+JSON.stringify(it.data),30000,null,DG_SCHEMA)));
+  try{const out=dgClean(dgJson((await aiCall(`次の JSON の各文字列を自然な${DG[lang].name}に訳してください。構造と項目数はそのまま、JSON だけを出力。\n`+JSON.stringify(it.data),DG_SCHEMA,30000)).text));
     (it.tr=it.tr||{})[lang]=out;dgState='';if(cur===id)api('/api/meetings/'+id,{digests}).catch(()=>{})}
   catch(e){dgState='error';dgMsg='翻訳に失敗:'+e.message}renderDigest()}
 $('#dgLang').onchange=()=>{dgLang=$('#dgLang').value;LS.set('dgLang',dgLang);dgTranslate()};
@@ -2791,8 +3017,8 @@ function applyState(){
 }
 const es=new EventSource('/events');
 es.onmessage=ev=>{const e=JSON.parse(ev.data);
-  if(e.type==='state'){Object.assign(state,e);if(e.status==='recording'||e.status==='idle'||e.status==='error')refresh();else applyState()}
-  else if(e.type==='line'&&cur)addLine(e);
+  if(e.type==='state'){Object.assign(state,e);if(e.status==='recording'||e.status==='idle'||e.status==='error')refresh();else applyState();if(cur)renderDigest()}
+  else if(e.type==='line'&&cur){if(e.text)lastLineAt=Date.now();addLine(e)}
   else if(e.type==='speakers'){speakers=e.speakers;if(cur)refreshNames()}
   else if(e.type==='error')toast(e.message);
   else if(e.type==='paused')setPaused(e.paused);
