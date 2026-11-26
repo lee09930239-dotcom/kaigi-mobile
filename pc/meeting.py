@@ -51,7 +51,7 @@ import numpy as np
 BASE = Path(__file__).resolve().parent
 MODEL_DIR = BASE / "models"
 REC_DIR = BASE / "recordings"
-BUILD = "2026-11-26b"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
+BUILD = "2026-11-26c"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
 # 一鍵更新:新版放在這裡(Josh 合併 PR 才會發布)
 UPDATE_BASE = "https://raw.githubusercontent.com/lee09930239-dotcom/kaigi-mobile/main/pc/"
 WRITE_LOG = BASE / "meta_writes.log"
@@ -2358,8 +2358,18 @@ button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e
     <div class="note" id="trNote"></div>
     <button id="importOpen" style="margin-top:10px">⇪ 録音ファイルを取り込む(スマホで録音した会議)</button>
   </div>
-  <h2 style="display:flex;justify-content:space-between;align-items:baseline">過去の会議 <span style="font-size:13px;font-weight:normal"><a href="#" class="openGem">Gemini の設定</a></span></h2>
+  <h2 style="display:flex;justify-content:space-between;align-items:baseline">過去の会議 </h2>
   <div class="card list" id="meetings"><div class="note">まだ記録がありません</div></div>
+  <details class="card" id="gemBox" style="margin-top:18px">
+    <summary style="cursor:pointer;font-weight:bold">☁ オプション:Gemini(Google の AI)で要点・議事録を自動作成 <span id="gemState" class="note" style="font-weight:normal"></span></summary>
+    <div class="banner" style="margin:12px 0;background:#fff7ed;border-color:#fdba74">
+      <b>⚠ 使う前にお読みください</b><br>
+      ・会議の内容(文字・音声)が Google に送られます。<br>
+      ・無料版では、送った内容が Google のサービス改善に使われることがあります。<br>
+      ・社外秘の会議では使わないなど、会社のルールを確認してからお使いください。</div>
+    <div class="note">使わない場合も、字幕と翻訳はこのパソコンの中だけで動きます(議事録は ChatGPT などにコピーして作成できます)。</div>
+    <button class="openGem" style="margin-top:10px">内容を確認しました。Gemini を設定する</button>
+  </details>
 </div>
 
 <!-- 録音画面 -->
@@ -2702,6 +2712,8 @@ document.querySelectorAll('.openGem').forEach(a=>a.onclick=async e=>{e.preventDe
   gemMsg(null);$('#gemSave').textContent='保存してテスト';$('#gemKey').placeholder=gem.configured?'設定済み(変更するときだけ貼り付け)':'ここにキーを貼り付け';$('#gemDel').classList.toggle('hidden',!gem.configured);$('#gemDlg').showModal()});
 $('#gemOpen').onclick=e=>{e.preventDefault();window.open(gem.url||'https://aistudio.google.com/apikey','_blank')};
 $('#gemClose').onclick=()=>$('#gemDlg').close();
+function gemBoxRender(){api('/api/gemini').then(g=>{$('#gemState').textContent=g.configured?'(✅ 設定済み)':'(未設定)'}).catch(()=>{})}
+$('#gemDlg').addEventListener('close',gemBoxRender);gemBoxRender();
 $('#gemDel').onclick=async()=>{await api('/api/gemini',{key:''});toast('キーを削除しました');$('#gemDlg').close();if($('#done').open)openDone(doneId)};
 function gemMsg(kind,html){const d=$('#gemMsg');d.classList.toggle('hidden',!kind);if(!kind)return;
   d.style.background={run:'#eef2ff',ok:'#e8f7ee',ng:'#fdecec'}[kind];d.style.color={run:'#1e3a8a',ok:'#166534',ng:'#991b1b'}[kind];d.innerHTML=html}
