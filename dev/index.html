@@ -160,25 +160,29 @@ h2{font-size:16px;margin:0 0 8px}
   </div>
   <div class="card">
     <h2><span class="step">1</span>AI にまとめてもらう</h2>
+    <div id="gemSumBox"><button id="gemSum" class="primary" style="width:100%">✨ Gemini で議事録を作る</button>
+      <p class="note" id="gemSumNote">結果は下の ② に入ります(30 秒〜1 分)。</p></div>
+    <p class="note hidden" id="gemSumOff">ホームの「⚙ 詳細設定」で Gemini のアクセスコードを設定すると、ボタン 1 つで議事録を作れます。</p>
     <p class="note hidden" id="fillMsg"></p>
     <div class="row hidden" id="fillRow" style="margin-bottom:8px"><button id="fillBtn">🔁 字幕のない部分を録音から作る</button></div>
     <p class="warn hidden" id="noTx">⚠ 文字起こしがありません。録音ファイルをパソコン版に取り込んでください。</p>
-    <div class="row"><button id="copyBtn" class="primary">📋 AI 用にコピー</button></div>
-    <div class="row" style="margin-top:8px"><a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini を開く</a></div>
-    <p class="note">AI の入力欄を長押し → 「ペースト」→ 送信。</p>
+    <details id="copyBox" style="margin-top:8px"><summary class="note">ChatGPT・Claude などを使う(コピー&貼り付け)</summary>
+    <div class="row" style="margin-top:8px"><button id="copyBtn">📋 AI 用にコピー</button></div>
+    <div class="row" style="margin-top:8px"><a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a><a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">Claude を開く</a></div>
+    <p class="note">AI の入力欄を長押し → 「ペースト」→ 送信。回答を ② に貼り付けてください。</p></details>
   </div>
   <div class="card">
-    <h2><span class="step">2</span>AI の回答を貼り付け(保存されます)</h2>
-    <textarea id="dSummary" placeholder="=====摘要===== から始まる回答をそのまま貼り付け" style="min-height:140px"></textarea>
+    <h2><span class="step">2</span>議事録(ここで直せます・自動保存)</h2>
+    <textarea id="dSummary" placeholder="① で作った議事録がここに入ります(ChatGPT などの回答はここに貼り付け)" style="min-height:140px"></textarea>
     <div class="row" style="margin-top:8px"><button id="copySum">📋 議事録をコピー</button><button id="dlSum">⬇ 議事録 (.txt)</button></div>
   </div>
   <div class="card">
-    <h2><span class="step">3</span>議事録を保存</h2>
+    <h2><span class="step">3</span>議事録をファイルにする</h2>
     <div class="outs" id="outs">
       <label><input type="checkbox" data-o="pdf-ja"> PDF 日本語</label><label><input type="checkbox" data-o="pdf-zh"> PDF 中文</label>
       <label><input type="checkbox" data-o="word-ja"> Word 日本語</label><label><input type="checkbox" data-o="word-zh"> Word 中文</label></div>
     <button id="outBtn" class="primary" style="width:100%">⬇ 保存する</button>
-    <p class="note" id="outNote">中文は保存するときに AI(Gemini)が日本語の議事録を訳します。PDF は印刷画面が開くので「PDF として保存」を選んでください。</p>
+    <p class="note" id="outNote">② の議事録を PDF や Word のファイルにして、スマホに保存します(メール・LINE で送れます)。中文は Gemini が日本語から訳します。PDF は印刷画面が開くので「PDF として保存」を選んでください。</p>
   </div>
   <div class="card">
     <h2><span class="step">4</span>パソコンに送る・保存する</h2>
@@ -196,7 +200,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-26b</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-26c</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -553,6 +557,7 @@ async function openDetail(id){doc=await get(id);if(!doc)return;const m=doc;
   const hasA=!!(m.audio&&m.audio.size);$('#shareAudio').disabled=!hasA;$('#dlAudio').disabled=!hasA;
   $('#audioInfo').textContent=hasA?`録音ファイル:${(m.audio.size/1048576).toFixed(1)} MB(${extOf(m.audio.type)})`:'録音ファイルはありません(字幕だけモード)';
   $('#fillRow').classList.toggle('hidden',!(hasA&&gemKey&&GEM_PROXY&&(m.gaps||[]).some(g=>g.e-g.s>=3&&!g.filled)));if(!backfill.busy)$('#fillMsg').classList.add('hidden');
+  const g=!!(gemKey&&GEM_PROXY);$('#gemSumBox').classList.toggle('hidden',!g);$('#gemSumOff').classList.toggle('hidden',g);$('#copyBox').open=!g;$('#gemSum').disabled=noTx;
   editing=false;$('#editTx').textContent='✏️ 編集';renderLines();
   show('detail')}
 let dT=null,editing=false;
@@ -594,6 +599,11 @@ $('#outBtn').onclick=async()=>{const d=doc;if(!d)return;const outs=[...document.
       w.document.open();w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(safe(d.name))}_議事録</title><style>${DOC_CSS}@media screen{body{margin:16px}}</style></head><body>${body}<script>setTimeout(()=>print(),400)<\/script></body></html>`);w.document.close()}
     $('#outNote').textContent='✓ 保存しました'+(w?'(PDF は印刷画面で「PDF として保存」)':'')}
   catch(e){if(w)w.close();$('#outNote').textContent='';toast(e.message)}finally{$('#outBtn').disabled=false}};
+$('#gemSum').onclick=async()=>{const d=doc;if(!d||!d.lines.length)return;if((d.summary||'').trim()&&!confirm('② の議事録を作り直しますか?(今の内容は置き換わります)'))return;
+  $('#gemSum').disabled=true;$('#gemSumNote').textContent='Gemini がまとめています…(30 秒〜1 分)';
+  try{const t=(await gemCall([{text:promptOf(d)}],false,120000)).trim();if(!t)throw new Error('空の回答でした');d.summary=t;if(doc===d){$('#dSummary').value=t;await put(d)}
+    $('#gemSumNote').textContent='✓ できました。② で確認・修正して、③ でファイルにしてください'}
+  catch(e){$('#gemSumNote').textContent='失敗しました:'+e.message+'(下の「ChatGPT・Claude などを使う」でも作れます)'}finally{$('#gemSum').disabled=false}};
 function audioFile(){const e=extOf(doc.audio.type);return new File([doc.audio],safe(doc.name)+'.'+e,{type:doc.audio.type||'audio/webm'})}
 $('#dlAudio').onclick=()=>{const f=audioFile();download(f,f.name)};
 $('#shareAudio').onclick=async()=>{const f=audioFile();
