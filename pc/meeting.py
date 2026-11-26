@@ -51,7 +51,7 @@ import numpy as np
 BASE = Path(__file__).resolve().parent
 MODEL_DIR = BASE / "models"
 REC_DIR = BASE / "recordings"
-BUILD = "2026-11-26d"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
+BUILD = "2026-11-26e"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
 # 一鍵更新:新版放在這裡(Josh 合併 PR 才會發布)
 UPDATE_BASE = "https://raw.githubusercontent.com/lee09930239-dotcom/kaigi-mobile/main/pc/"
 WRITE_LOG = BASE / "meta_writes.log"
@@ -2666,9 +2666,9 @@ button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e
       <label><input type="checkbox" data-o="word-zh"> Word 中文</label></div>
     <div class="row2"><button id="outBtn" class="needs primary">⬇ 保存する</button> <span class="note" id="outNote"></span></div>
     <div class="note">中文は保存するときに AI が日本語の議事録を訳します。ファイルは会議フォルダ(recordings)にも保存されます。</div>
+    <div class="note" style="margin-top:8px">文字起こし(全文・自動認識のまま) <button data-kind="transcript" style="font-size:12px;padding:3px 10px">Word で保存</button></div>
     <details style="margin-top:6px"><summary class="note">その他のファイル</summary><div class="row2">
-      <button data-kind="summary" class="needs">Word 要約</button>
-      <button data-kind="transcript">Word 文字起こし</button></div></details></div>
+      <button data-kind="summary" class="needs">Word 要約</button></div></details></div>
   <details><summary>話者の分け方・字幕がおかしいとき</summary>
     <div style="margin-top:8px" class="opt"><button id="spkBtn">話者だけ分け直す</button> <label>出席人数(自分を含む)</label><input id="spkN" type="number" min="1" max="20" style="width:80px" placeholder="自動">
       <span class="note" style="margin:0">字幕はそのまま、声の特徴で会議全体をまとめて分け直します(数分)</span></div>
