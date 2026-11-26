@@ -203,13 +203,15 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-26d</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-26e</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
 <script>
 const $=s=>document.querySelector(s);
 const LS={getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v),removeItem:k=>localStorage.removeItem(k)};
+// 以前のテスト版(dev)の設定を引き継ぐ(同じ端末で一度だけ。正式版にすでにある設定は上書きしない)
+try{if(!localStorage.getItem('devMerged')){for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('kdev_')){const n=k.slice(5);if(localStorage.getItem(n)===null)localStorage.setItem(n,localStorage.getItem(k))}}}}catch(e){}
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const LANGN={'ja-JP':'日本語','zh-TW':'中文','en-US':'English'};
 let lang=LS.getItem('lang')||'ja-JP';let tgt='off';try{tgt=LS.getItem('tgt2')||'off'}catch(e){}
@@ -222,6 +224,16 @@ $('#updBtn').onclick=reloadFresh;$('#updNow').onclick=reloadFresh;
   if(m&&m[1]!==$('#ver').textContent)$('#updBar').classList.remove('hidden')}catch(e){}})();
 // ---------- IndexedDB ----------
 let dbp=null;
+// 以前のテスト版(dev)の会議を正式版にコピー(一度だけ・同じ ID はスキップ)
+async function mergeDev(){try{if(localStorage.getItem('devMerged'))return}catch(e){return}
+  const src=await new Promise(ok=>{let r;try{r=indexedDB.open('kaigi-mobile-dev',1)}catch(e){return ok(null)}
+    r.onupgradeneeded=e=>{if(!e.oldVersion){try{r.transaction.abort()}catch(_){}}};r.onsuccess=()=>ok(r.result);r.onerror=()=>ok(null);r.onblocked=()=>ok(null)});
+  let n=0;if(src&&src.objectStoreNames.contains('meetings')){
+    const all=(st)=>new Promise(ok=>{try{const q=src.transaction(st,'readonly').objectStore(st).getAll();q.onsuccess=()=>ok(q.result||[]);q.onerror=()=>ok([])}catch(e){ok([])}});
+    const ms=await all('meetings'),cs=src.objectStoreNames.contains('chunks')?await all('chunks'):[];
+    for(const m of ms){if(await get(m.id))continue;await put(m);n++;for(const c of cs)if(c.mid===m.id)await tx('chunks','readwrite',s=>s.put(c))}
+    src.close()}
+  try{localStorage.setItem('devMerged','1')}catch(e){}if(n){toast(`テスト版の会議 ${n} 件をこちらに移しました`);try{renderList()}catch(e){}}}
 function db(){return dbp||(dbp=new Promise((ok,ng)=>{const r=indexedDB.open('kaigi-mobile',1);
   r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('meetings',{keyPath:'id'});d.createObjectStore('chunks',{keyPath:['mid','seq']})};
   r.onsuccess=()=>ok(r.result);r.onerror=()=>ng(r.error)}))}
@@ -621,6 +633,7 @@ $('#shareAudio').onclick=async()=>{const f=audioFile();
 $('#delBtn').onclick=async()=>{if(!confirm('この会議(文字起こし・録音・議事録)を削除しますか?元に戻せません'))return;await del(doc.id);await delChunks(doc.id);doc=null;show('home');renderList()};
 $('#backBtn').onclick=async()=>{if(doc)await put(doc);doc=null;show('home');renderList()};
 window.addEventListener('beforeunload',e=>{if(cur){put(cur);e.preventDefault();e.returnValue=''}});
+mergeDev();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
