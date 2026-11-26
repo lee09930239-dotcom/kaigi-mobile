@@ -174,7 +174,10 @@ h2{font-size:16px;margin:0 0 8px}
   <div class="card">
     <h2><span class="step">2</span>議事録(ここで直せます・自動保存)</h2>
     <textarea id="dSummary" placeholder="① で作った議事録がここに入ります(ChatGPT などの回答はここに貼り付け)" style="min-height:140px"></textarea>
-    <div class="row" style="margin-top:8px"><button id="copySum">📋 議事録をコピー</button><button id="dlSum">⬇ 議事録 (.txt)</button></div>
+    <div style="text-align:right;margin-top:6px"><button id="copySum" style="min-height:34px;padding:4px 12px;font-size:14px">📋 文字をコピー</button></div>
+    <div id="revBox" style="margin-top:8px"><label for="revTx" style="margin-top:0">直したいところ(Gemini が直します)</label>
+      <textarea id="revTx" placeholder="例:もっと短く / 結論を一番上に / 「王さん」は「汪さん」" style="min-height:64px"></textarea>
+      <button id="revBtn" style="width:100%;margin-top:6px">✏️ Gemini で直す</button><p class="note" id="revNote"></p></div>
   </div>
   <div class="card">
     <h2><span class="step">3</span>議事録をファイルにする</h2>
@@ -182,6 +185,7 @@ h2{font-size:16px;margin:0 0 8px}
       <label><input type="checkbox" data-o="pdf-ja"> PDF 日本語</label><label><input type="checkbox" data-o="pdf-zh"> PDF 中文</label>
       <label><input type="checkbox" data-o="word-ja"> Word 日本語</label><label><input type="checkbox" data-o="word-zh"> Word 中文</label></div>
     <button id="outBtn" class="primary" style="width:100%">⬇ 保存する</button>
+    <div style="margin-top:8px"><button id="dlSum" style="width:100%">⬇ テキスト (.txt)</button></div>
     <p class="note" id="outNote">② の議事録を PDF や Word のファイルにして、スマホに保存します(メール・LINE で送れます)。中文は Gemini が日本語から訳します。PDF は印刷画面が開くので「PDF として保存」を選んでください。</p>
   </div>
   <div class="card">
@@ -200,7 +204,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-26c</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">dev-2026-11-26d</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -557,7 +561,7 @@ async function openDetail(id){doc=await get(id);if(!doc)return;const m=doc;
   const hasA=!!(m.audio&&m.audio.size);$('#shareAudio').disabled=!hasA;$('#dlAudio').disabled=!hasA;
   $('#audioInfo').textContent=hasA?`録音ファイル:${(m.audio.size/1048576).toFixed(1)} MB(${extOf(m.audio.type)})`:'録音ファイルはありません(字幕だけモード)';
   $('#fillRow').classList.toggle('hidden',!(hasA&&gemKey&&GEM_PROXY&&(m.gaps||[]).some(g=>g.e-g.s>=3&&!g.filled)));if(!backfill.busy)$('#fillMsg').classList.add('hidden');
-  const g=!!(gemKey&&GEM_PROXY);$('#gemSumBox').classList.toggle('hidden',!g);$('#gemSumOff').classList.toggle('hidden',g);$('#copyBox').open=!g;$('#gemSum').disabled=noTx;
+  const g=!!(gemKey&&GEM_PROXY);$('#gemSumBox').classList.toggle('hidden',!g);$('#gemSumOff').classList.toggle('hidden',g);$('#copyBox').open=!g;$('#revBox').classList.toggle('hidden',!g);$('#revNote').textContent='';$('#gemSum').disabled=noTx;
   editing=false;$('#editTx').textContent='✏️ 編集';renderLines();
   show('detail')}
 let dT=null,editing=false;
@@ -604,6 +608,11 @@ $('#gemSum').onclick=async()=>{const d=doc;if(!d||!d.lines.length)return;if((d.s
   try{const t=(await gemCall([{text:promptOf(d)}],false,120000)).trim();if(!t)throw new Error('空の回答でした');d.summary=t;if(doc===d){$('#dSummary').value=t;await put(d)}
     $('#gemSumNote').textContent='✓ できました。② で確認・修正して、③ でファイルにしてください'}
   catch(e){$('#gemSumNote').textContent='失敗しました:'+e.message+'(下の「ChatGPT・Claude などを使う」でも作れます)'}finally{$('#gemSum').disabled=false}};
+$('#revBtn').onclick=async()=>{const d=doc,ask=$('#revTx').value.trim();if(!d)return;if(!(d.summary||'').trim())return toast('先に ① で議事録を作ってください');if(!ask)return toast('直したいところを書いてください');
+  $('#revBtn').disabled=true;$('#revNote').textContent='Gemini が直しています…';
+  try{const t=(await gemCall([{text:'次の会議の議事録を、下の「修正の希望」どおりに直してください。希望にないところは変えない。区切り行(=====摘要===== など)・見出し・箇条書きの形は保つ。文字起こしにないことは足さない。直した議事録の全文だけを出力。\n\n■ 修正の希望\n'+ask+'\n\n■ 今の議事録\n'+d.summary+'\n\n■ 参考:文字起こし\n'+txLines(d).slice(-20000)}],false,120000)).trim();
+    if(!t)throw new Error('空の回答でした');d.summary=t;if(doc===d){$('#dSummary').value=t;await put(d)}$('#revTx').value='';$('#revNote').textContent='✓ 直しました。② を確認してください'}
+  catch(e){$('#revNote').textContent='失敗しました:'+e.message}finally{$('#revBtn').disabled=false}};
 function audioFile(){const e=extOf(doc.audio.type);return new File([doc.audio],safe(doc.name)+'.'+e,{type:doc.audio.type||'audio/webm'})}
 $('#dlAudio').onclick=()=>{const f=audioFile();download(f,f.name)};
 $('#shareAudio').onclick=async()=>{const f=audioFile();
