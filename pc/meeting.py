@@ -51,7 +51,7 @@ import numpy as np
 BASE = Path(__file__).resolve().parent
 MODEL_DIR = BASE / "models"
 REC_DIR = BASE / "recordings"
-BUILD = "2026-11-26a"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
+BUILD = "2026-11-26b"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
 # 一鍵更新:新版放在這裡(Josh 合併 PR 才會發布)
 UPDATE_BASE = "https://raw.githubusercontent.com/lee09930239-dotcom/kaigi-mobile/main/pc/"
 WRITE_LOG = BASE / "meta_writes.log"
@@ -2294,7 +2294,8 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1d2329;color:#fff;padding:10px 18px;border-radius:8px;font-size:14px;z-index:9}
 /* 現在の要点(大) + 字幕(小) */
-.main{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) 280px}
+.main{grid-template-columns:var(--c1,minmax(0,1.35fr)) 7px minmax(160px,1fr) 7px var(--c3,280px)}
+.gut{cursor:col-resize;background:var(--line);opacity:.5;touch-action:none}.gut:hover,.gut.on{opacity:1;background:var(--accent)}
 #digest{overflow-y:auto;padding:16px 18px;border-right:1px solid var(--line);background:#fbfcfe}
 .dg-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .dg-head h3{margin:0;font-size:18px;flex:1;white-space:nowrap}
@@ -2319,8 +2320,8 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 #log .zh{font-size:13px;line-height:1.4}
 #log .meta{font-size:11px}
 #log .empty{margin-top:10vh;font-size:13px}
-@media (max-width:1100px){.main{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 220px}}
-@media (max-width:800px){.main{grid-template-columns:1fr}.side{display:none}#digest{border-right:none;max-height:55vh}}
+
+@media (max-width:800px){.main{grid-template-columns:1fr!important}.gut{display:none}.side{display:none}#digest{border-right:none;max-height:55vh}}
 button:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(1)}
 button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e8e3e!important}
 .txnote{color:#b26a00;font-weight:600;margin:6px 0}
@@ -2379,7 +2380,9 @@ button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e
         <button id="dgNow">今すぐまとめる</button></div>
       <div id="dgBody"></div>
     </div>
+    <div class="gut" data-g="1" title="ドラッグで幅を変更(ダブルクリックで元に戻す)"></div>
     <div id="log"><div class="empty" id="emptyMsg">聞き取り中… 話し始めるとここに字幕が出ます</div></div>
+    <div class="gut" data-g="2" title="ドラッグで幅を変更(ダブルクリックで元に戻す)"></div>
     <div class="side">
       <b>話者</b>
       <div id="spkList"></div>
@@ -2538,6 +2541,18 @@ const DG_KEYS=['direction','agreed','open','now'];
 const DG_SCHEMA={type:'OBJECT',properties:Object.fromEntries(DG_KEYS.map(k=>[k,{type:'ARRAY',items:{type:'STRING'}}])),required:DG_KEYS};
 function dgData(it,lang){return it.lang===lang?it.data:(it.tr&&it.tr[lang])||null}
 function hm(d){return d.toTimeString().slice(0,5)}
+// ---- 3 つの欄の幅:境目の線をドラッグ(幅はこのパソコンに保存) ----
+(function(){const mn=document.querySelector('#rec .main');let c1=0,c3=0;
+  try{c1=+localStorage.getItem('colW1')||0;c3=+localStorage.getItem('colW3')||0}catch(e){}
+  const apply=()=>{mn.style.setProperty('--c1',c1?c1+'px':'');mn.style.setProperty('--c3',c3?c3+'px':'');if(!c1)mn.style.removeProperty('--c1');if(!c3)mn.style.removeProperty('--c3')};
+  const save=()=>{try{localStorage.setItem('colW1',c1||'');localStorage.setItem('colW3',c3||'')}catch(e){}};apply();
+  document.querySelectorAll('#rec .gut').forEach(g=>{
+    g.onpointerdown=e=>{e.preventDefault();g.setPointerCapture(e.pointerId);g.classList.add('on');
+      const r=mn.getBoundingClientRect(),w1=document.querySelector('#digest').getBoundingClientRect().width,w3=document.querySelector('#rec .side').getBoundingClientRect().width;
+      g.onpointermove=ev=>{if(g.dataset.g==='1')c1=Math.round(Math.max(200,Math.min(r.width-w3-14-160,ev.clientX-r.left)));
+        else{c3=Math.round(Math.max(140,Math.min(r.width-w1-14-160,r.right-ev.clientX)));if(!c1)c1=Math.round(w1)}apply()}};
+    g.onpointerup=g.onpointercancel=e=>{g.onpointermove=null;g.classList.remove('on');save()};
+    g.ondblclick=()=>{c1=0;c3=0;apply();save()}})})();
 function renderDigest(){const L=DG[dgLang]||DG.ja;$('#dgLang').value=dgLang;$('#dgInt').value=String(dgInt);$('#dgTitle').textContent=L.title;
   const last=digests[digests.length-1];
   let st=dgState==='running'?'<span class="spin"></span>'+L.run:dgState==='translating'?'<span class="spin"></span>'+L.tr:dgState==='error'?esc(dgMsg):'';
