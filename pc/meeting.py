@@ -51,7 +51,7 @@ import numpy as np
 BASE = Path(__file__).resolve().parent
 MODEL_DIR = BASE / "models"
 REC_DIR = BASE / "recordings"
-BUILD = "2026-11-26c"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
+BUILD = "2026-11-26d"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
 # 一鍵更新:新版放在這裡(Josh 合併 PR 才會發布)
 UPDATE_BASE = "https://raw.githubusercontent.com/lee09930239-dotcom/kaigi-mobile/main/pc/"
 WRITE_LOG = BASE / "meta_writes.log"
@@ -615,7 +615,7 @@ class QwenTranslator:
             # 低優先權:電腦忙的時候 Windows 會先讓字幕(辨識)跑,Qwen 只用剩下的 CPU
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
             self.proc = subprocess.Popen([str(exe), "-m", str(model), "--host", "127.0.0.1", "--port", str(LLAMA_PORT),
-                                          "-t", str(threads), "-c", "4096"],
+                                          "-t", str(threads), "-c", "8192"],
                                          stdout=log, stderr=log, creationflags=flags)
             atexit.register(self.close)
             for _ in range(240):
@@ -819,8 +819,9 @@ class App:
         if self.caption_lag() > 3:
             raise RuntimeError("字幕の処理を優先しています。少しあとでまとめます")
         sch = d.get("schema")
-        out = q.chat(str(d.get("system") or "JSON だけを出力してください。"), str(d.get("user", ""))[:6000],
-                     max_tokens=int(d.get("max_tokens") or 450), schema=llama_schema(sch) if sch else None, timeout=180)
+        out = q.chat(str(d.get("system") or "JSON だけを出力してください。"), str(d.get("user", ""))[:9000],
+                     max_tokens=int(d.get("max_tokens") or 450), schema=llama_schema(sch) if sch else None,
+                     timeout=120 + int(d.get("max_tokens") or 450) // 4)
         return out
 
     def set_status(self, status, message):
@@ -1178,7 +1179,7 @@ class App:
 
     def update_meta(self, mid, data):
         m = self.meeting.refresh() if self.meeting and self.meeting.id == mid else Meeting(REC_DIR / mid)
-        for k in ("name", "notes", "notes_after", "speakers", "summary", "out_lang", "length", "style_note", "digests", "turns"):
+        for k in ("name", "notes", "notes_after", "speakers", "summary", "out_lang", "length", "style_note", "digests", "turns", "summary_zh", "summary_zh_src"):
             if k in data:
                 if k == "summary" and data[k] != m.meta.get("summary"):
                     m.meta.pop("zh", None)  # 手動改了議事錄,中文確認版要重做
@@ -2040,17 +2041,19 @@ def set_widths(table, cms):
 EXPORT_KINDS = {"transcript": "文字起こし", "summary": "要約", "minutes": "議事録"}
 
 
-def export_docx(m, kind):
+def export_docx(m, kind, lang="ja"):
     meta = m.meta
-    ja = True
-    summary, minutes = split_summary(meta.get("summary", ""))
+    ja = lang != "zh"
+    summary, minutes = split_summary(meta.get("summary" if ja else "summary_zh", ""))
+    if not ja and kind != "transcript" and not minutes:
+        raise ValueError("中文版がまだできていません")
     yymmdd = meta.get("start", "")[2:10].replace("-", "")
     name = meta.get("name") or "会議"
     doc = new_doc()
     if kind == "minutes":
         if not minutes:
             raise ValueError("まだ ChatGPT の議事録が貼り付けられていません")
-        doc.add_heading(f"{yymmdd} {name}", 0)
+        doc.add_heading(f"{yymmdd} {name}" + ("" if ja else "(中文)"), 0)
         add_info(doc, m, ja)
         add_markdown(doc, minutes)
     elif kind == "summary":
@@ -2093,15 +2096,30 @@ def pdf_fonts():
             pdfmetrics.registerFont(TTFont("JP", reg, subfontIndex=0))
             b = bold if bold and Path(bold).exists() else reg
             pdfmetrics.registerFont(TTFont("JP-B", b, subfontIndex=0))
+            reg_jp, bold_jp = reg, b
             for it in (0, 1):
                 addMapping("JP", 0, it, "JP")
                 addMapping("JP", 1, it, "JP-B")
-            return
-    raise ValueError("日本語フォント(メイリオ等)が見つからないため PDF を作れません")
+            break
+    else:
+        raise ValueError("日本語フォント(メイリオ等)が見つからないため PDF を作れません")
+    # 中国語版用(繁体字):Microsoft JhengHei があれば使う。なければ日本語フォントで代用
+    zh = [(r"C:\Windows\Fonts\msjh.ttc", r"C:\Windows\Fonts\msjhbd.ttc")]
+    for reg, bold in zh:
+        if Path(reg).exists():
+            pdfmetrics.registerFont(TTFont("ZH", reg, subfontIndex=0))
+            pdfmetrics.registerFont(TTFont("ZH-B", bold if Path(bold).exists() else reg, subfontIndex=0))
+            break
+    else:
+        pdfmetrics.registerFont(TTFont("ZH", reg_jp, subfontIndex=0))
+        pdfmetrics.registerFont(TTFont("ZH-B", bold_jp, subfontIndex=0))
+    for it in (0, 1):
+        addMapping("ZH", 0, it, "ZH")
+        addMapping("ZH", 1, it, "ZH-B")
 
 
-def export_pdf(m):
-    """要約+議事録の PDF"""
+def export_pdf(m, lang="ja"):
+    """要約+議事録の PDF(lang="zh" は中国語版)"""
     from html import escape
 
     from reportlab.lib import colors
@@ -2110,16 +2128,18 @@ def export_pdf(m):
     from reportlab.lib.units import cm
     from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    summary, minutes = split_summary(m.meta.get("summary", ""))
+    zh = lang == "zh"
+    summary, minutes = split_summary(m.meta.get("summary_zh" if zh else "summary", ""))
     if not minutes:
-        raise ValueError("まだ ChatGPT の議事録が貼り付けられていません")
+        raise ValueError("中文版がまだできていません" if zh else "まだ議事録がありません")
     pdf_fonts()
-    base = dict(fontName="JP", wordWrap="CJK", leading=16, fontSize=10.5)
+    F, FB = ("ZH", "ZH-B") if zh else ("JP", "JP-B")
+    base = dict(fontName=F, wordWrap="CJK", leading=16, fontSize=10.5)
     st = {
-        "title": ParagraphStyle("t", **{**base, "fontName": "JP-B", "fontSize": 17, "leading": 24, "spaceAfter": 8}),
-        "h1": ParagraphStyle("h1", **{**base, "fontName": "JP-B", "fontSize": 13.5, "leading": 20, "spaceBefore": 12,
+        "title": ParagraphStyle("t", **{**base, "fontName": FB, "fontSize": 17, "leading": 24, "spaceAfter": 8}),
+        "h1": ParagraphStyle("h1", **{**base, "fontName": FB, "fontSize": 13.5, "leading": 20, "spaceBefore": 12,
                                       "spaceAfter": 4, "textColor": colors.HexColor("#1f3864")}),
-        "h2": ParagraphStyle("h2", **{**base, "fontName": "JP-B", "fontSize": 11.5, "leading": 18, "spaceBefore": 8, "spaceAfter": 2}),
+        "h2": ParagraphStyle("h2", **{**base, "fontName": FB, "fontSize": 11.5, "leading": 18, "spaceBefore": 8, "spaceAfter": 2}),
         "p": ParagraphStyle("p", **{**base, "spaceAfter": 3}),
         "li": ParagraphStyle("li", **{**base, "leftIndent": 14, "bulletIndent": 4, "spaceAfter": 2}),
         "li2": ParagraphStyle("li2", **{**base, "leftIndent": 28, "bulletIndent": 18, "spaceAfter": 2}),
@@ -2154,7 +2174,7 @@ def export_pdf(m):
                   ["形式", "オンライン" if meta.get("mode") == "online" else "対面"],
                   ["出席者", "、".join(speaker_names(m))]],
                  colWidths=[2.6 * cm, 14 * cm])
-    info.setStyle(TableStyle([("FONT", (0, 0), (-1, -1), "JP", 10), ("FONT", (0, 0), (0, -1), "JP-B", 10),
+    info.setStyle(TableStyle([("FONT", (0, 0), (-1, -1), F, 10), ("FONT", (0, 0), (0, -1), FB, 10),
                               ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#dbe5f1")),
                               ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#8eaadb")),
                               ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
@@ -2173,7 +2193,7 @@ def export_pdf(m):
             i += 1
 
     def footer(c, d):
-        c.setFont("JP", 8)
+        c.setFont(F, 8)
         c.setFillColor(colors.grey)
         c.drawRightString(A4[0] - 2 * cm, 1.2 * cm, f"{d.page}")
 
@@ -2246,22 +2266,24 @@ def make_handler(app):
                 if m := re.fullmatch(r"/api/meetings/([\d-]+)/docx/(\w+)", path):
                     mt = self.meeting(m[1])
                     kind = m[2] if m[2] in EXPORT_KINDS else "transcript"
+                    lang = "zh" if "lang=zh" in self.path else "ja"
                     try:
-                        data = export_docx(mt, kind)
+                        data = export_docx(mt, kind, lang)
                     except ValueError as e:
                         return self.send(400, {"error": str(e)})
-                    fname = f"{EXPORT_KINDS[kind]}_{safe_name(mt.meta.get('name', ''))}_{mt.id[:8]}.docx"
+                    fname = f"{EXPORT_KINDS[kind]}{'_中文' if lang == 'zh' else ''}_{safe_name(mt.meta.get('name', ''))}_{mt.id[:8]}.docx"
                     (mt.dir / fname).write_bytes(data)
                     disp = "attachment; filename*=UTF-8''" + urllib.parse.quote(fname)
                     return self.send(200, data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                      {"Content-Disposition": disp})
                 if m := re.fullmatch(r"/api/meetings/([\d-]+)/pdf", path):
                     mt = self.meeting(m[1])
+                    lang = "zh" if "lang=zh" in self.path else "ja"
                     try:
-                        data = export_pdf(mt)
+                        data = export_pdf(mt, lang)
                     except ValueError as e:
                         return self.send(400, {"error": str(e)})
-                    fname = f"議事録_{safe_name(mt.meta.get('name', ''))}_{mt.id[:8]}.pdf"
+                    fname = f"議事録{'_中文' if lang == 'zh' else ''}_{safe_name(mt.meta.get('name', ''))}_{mt.id[:8]}.pdf"
                     (mt.dir / fname).write_bytes(data)
                     disp = "attachment; filename*=UTF-8''" + urllib.parse.quote(fname)
                     return self.send(200, data, "application/pdf", {"Content-Disposition": disp})
@@ -2506,6 +2528,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .dg-hist summary{font-size:13px}
 .dg-hist .item{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding:6px 0}
 #dgTurn{margin:0 0 12px;padding:10px 12px;border:2px solid #2563eb;border-radius:10px;background:#eff6ff}#dgTurn .tw{font-size:12px;color:#475569;margin-bottom:4px}#dgTurn .tc{font-size:19px;font-weight:bold;line-height:1.45}#dgTurn ul{margin:6px 0 0 18px;padding:0}#dgTurn li{margin:2px 0}
+.outs{display:grid;grid-template-columns:repeat(2,minmax(0,200px));gap:6px 16px;margin:8px 0}.outs label{display:flex;gap:6px;align-items:center;font-size:15px;cursor:pointer}.outs input{width:auto}
 .dg-wait{color:var(--muted);text-align:center;margin-top:12vh;line-height:1.8}
 #log{padding:10px}
 #log .row{padding:6px 10px;margin-bottom:6px;border-left-width:4px}
@@ -2635,13 +2658,17 @@ button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e
       <div class="row2"><button id="revBtn" class="primary">✏️ Gemini で直す</button>
         <button id="revGpt">📋 ChatGPT 用の修正依頼をコピー</button></div>
       <div class="note" id="revNote"></div></div></div>
-  <div class="step"><span class="num">4</span><b>ダウンロード</b>
-    <div class="row2">
-      <button data-kind="minutes" class="needs primary">Word 議事録</button>
-      <button data-pdf class="needs primary">PDF 議事録</button>
+  <div class="step"><span class="num">4</span><b>議事録を保存</b> <span class="note">(内容が OK になったら)</span>
+    <div class="outs" id="outs">
+      <label><input type="checkbox" data-o="pdf-ja"> PDF 日本語</label>
+      <label><input type="checkbox" data-o="pdf-zh"> PDF 中文</label>
+      <label><input type="checkbox" data-o="word-ja"> Word 日本語</label>
+      <label><input type="checkbox" data-o="word-zh"> Word 中文</label></div>
+    <div class="row2"><button id="outBtn" class="needs primary">⬇ 保存する</button> <span class="note" id="outNote"></span></div>
+    <div class="note">中文は保存するときに AI が日本語の議事録を訳します。ファイルは会議フォルダ(recordings)にも保存されます。</div>
+    <details style="margin-top:6px"><summary class="note">その他のファイル</summary><div class="row2">
       <button data-kind="summary" class="needs">Word 要約</button>
-      <button data-kind="transcript">Word 文字起こし</button>
-    </div><div class="note">ファイルは会議フォルダ(recordings)にも保存されます。</div></div>
+      <button data-kind="transcript">Word 文字起こし</button></div></details></div>
   <details><summary>話者の分け方・字幕がおかしいとき</summary>
     <div style="margin-top:8px" class="opt"><button id="spkBtn">話者だけ分け直す</button> <label>出席人数(自分を含む)</label><input id="spkN" type="number" min="1" max="20" style="width:80px" placeholder="自動">
       <span class="note" style="margin:0">字幕はそのまま、声の特徴で会議全体をまとめて分け直します(数分)</span></div>
@@ -2775,7 +2802,7 @@ function localReady(){return state.local_ai==='ready'}
 async function aiCall(prompt,schema,ms,localPrompt,maxTok){
   if(gem.key&&Date.now()>gemDown){try{return {text:await gemCall(gem.key,prompt,ms,null,schema),via:'cloud'}}
     catch(e){gemDown=Date.now()+(/無料枠|429/.test(e.message)?1800e3:120e3);console.log('Gemini 失敗 → ローカル',e.message)}}
-  const r=await api('/api/llm',{user:localPrompt||prompt,schema,max_tokens:maxTok||450});return {text:r.text,via:'local'}}
+  const r=await api('/api/llm',{user:localPrompt||prompt,schema,max_tokens:maxTok||450,system:schema?undefined:'指示どおりに出力してください。'});return {text:r.text,via:'local'}}
 // ---- さっきの発言:誰かが長く話して 3 秒止まったら、その段落を「結論 → 背景」でまとめる(通訳用) ----
 const TURN_MIN={zh:60,yue:60,ja:80,en:120};
 const TURN_SCHEMA={type:'OBJECT',properties:{conclusion:{type:'STRING'},background:{type:'ARRAY',items:{type:'STRING'}}},required:['conclusion','background']};
@@ -2978,8 +3005,28 @@ $('#openGpt').onclick=()=>window.open('https://chatgpt.com/','_blank');
 $('#saveTxt').onclick=async e=>{e.preventDefault();try{const t=await promptText();const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([t],{type:'text/plain'}));a.download=($('#doneName').value||'会議')+'_ChatGPT用.txt';a.click();
   toast('保存しました。ChatGPT の「+」から添付し、「添付の指示どおりに議事録を作ってください」と送ってください')}catch(e){toast(e.message)}};
-document.querySelectorAll('#done [data-kind],#done [data-pdf]').forEach(b=>b.onclick=async()=>{await saveDone();
-  const url='/api/meetings/'+doneId+(b.dataset.pdf!==undefined?'/pdf':'/docx/'+b.dataset.kind);
+// ---- 保存:PDF/Word × 日本語/中文 を選んで 1 ボタン ----
+(function(){const sel=(LS.get('outSel','pdf-ja')||'').split(',');document.querySelectorAll('#outs input').forEach(c=>{c.checked=sel.includes(c.dataset.o);
+  c.onchange=()=>LS.set('outSel',[...document.querySelectorAll('#outs input:checked')].map(x=>x.dataset.o).join(','))})})();
+function dlFile(url){const a=document.createElement('a');a.href=url;a.download='';document.body.appendChild(a);a.click();a.remove()}
+async function ensureZh(){const ja=$('#doneSummary').value.trim();const m=await api('/api/meetings/'+doneId);
+  if(m.summary_zh&&m.summary_zh_src===ja)return;
+  if(!gem.key&&!localReady())throw new Error('中文版を作るには Gemini かこのパソコンの AI が必要です(AI を準備中ならしばらくお待ちください)');
+  $('#outNote').innerHTML='<span class="spin"></span>中文版を作成中…'+(gem.key?'(1分ほど)':'(このパソコンの AI で数分かかります)');
+  const p='次の会議の議事録を、台湾の人が読む自然な繁体字中国語(台灣繁體中文)に訳してください。\n'+
+    '・「=====摘要=====」「=====議事録=====」などの区切り行と、見出し・箇条書き・表などの書式はそのまま残す\n・内容は足したり削ったりせず、そのまま訳す。説明や前置きは書かず、訳文だけを出力\n・社名・人名・数字・型番はそのまま\n\n'+ja;
+  const r=await aiCall(p,null,180000,null,3500);let zh=r.text.replace(/^```[a-z]*\n?|```$/g,'').trim();
+  await api('/api/meetings/'+doneId,{summary_zh:zh,summary_zh_src:ja})}
+$('#outBtn').onclick=async()=>{const outs=[...document.querySelectorAll('#outs input:checked')].map(x=>x.dataset.o);
+  if(!outs.length){toast('保存するものを選んでください');return}
+  $('#outBtn').disabled=true;try{await saveDone();
+    if(outs.some(o=>o.endsWith('zh')))await ensureZh();
+    for(const o of outs){const [f,l]=o.split('-');const url='/api/meetings/'+doneId+(f==='pdf'?'/pdf':'/docx/minutes')+'?lang='+l;
+      const r=await fetch(url);if(!r.ok){throw new Error((await r.json()).error)}dlFile(url);await new Promise(z=>setTimeout(z,700))}
+    $('#outNote').textContent='✅ 保存しました('+outs.length+' 件)'}
+  catch(e){$('#outNote').textContent='';toast(e.message)}finally{$('#outBtn').disabled=false;syncNeeds()}};
+document.querySelectorAll('#done [data-kind]').forEach(b=>b.onclick=async()=>{await saveDone();
+  const url='/api/meetings/'+doneId+'/docx/'+b.dataset.kind;
   const r=await fetch(url);if(!r.ok){toast((await r.json()).error);return}location.href=url});
 $('#reBtn').onclick=async()=>{if(!confirm('録音全体を認識し直しますか?長い会議ほど時間がかかり、その間は新しい録音ができません。'))return;
   $('#reBtn').disabled=true;try{await saveDone();await api('/api/meetings/'+doneId+'/reprocess',{});$('#reNote').textContent='処理を開始しました…';busyId=doneId;setTx(true)}
