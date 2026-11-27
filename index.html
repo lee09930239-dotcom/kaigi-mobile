@@ -83,14 +83,15 @@ h2{font-size:16px;margin:0 0 8px}
 
 <!-- ホーム -->
 <section id="home">
-  <div class="card">
-    <button id="siteBtn" class="primary big" style="background:var(--warn);border-color:var(--warn)">🦺 現場翻訳 / 現場翻譯</button>
-    <p class="note">現場監督・作業員との短い会話用。話すとすぐ中⇄日 の訳を大きく出し、1 分ごとに「重點・注意事項」をまとめます。配管・溶接の用語集を使って聞き取ります(Gemini のアクセスコードが必要)。</p>
+  <div class="seg" id="kindSeg" style="margin-top:6px"><button data-k="site">🗣 現場・生活の通訳</button><button data-k="meet">🎙 会議</button></div>
+  <div class="card" id="siteCard">
+    <button id="siteBtn" class="primary big" style="background:var(--warn);border-color:var(--warn)">🗣 すぐ通訳 / 立即翻譯</button>
+    <p class="note">現場や生活の中の、急な短い会話用(現場監督・作業員、病院、役所、お店など)。話すとすぐ訳を大きく出し(中文 → 日本語、日本語 → 中文、English → 日本語)、1 分ごとに「重點・注意事項」をまとめます。配管・溶接・生活の用語集を使って聞き取ります(Gemini のアクセスコードが必要)。</p>
     <details><summary class="note">📖 自分の用語を追加(用語集 <span id="glN">0</span> 語)</summary>
       <p class="note">1 行に「中文=日本語」(例:二次配=二次配管)。いくつかの言い方は「、」で区切る。このスマホに保存され、次の一言から使われます。</p>
       <textarea id="myGloss" placeholder="中文=日本語" style="min-height:80px"></textarea></details>
   </div>
-  <div class="card">
+  <div class="card" id="meetCard">
     <label for="mode" style="margin-top:0">モード</label>
     <select id="mode">
       <option value="gem" id="gemOpt" hidden>自動判定(Gemini)おすすめ</option>
@@ -157,7 +158,7 @@ h2{font-size:16px;margin:0 0 8px}
     <div id="dgSt"></div><div id="dgBody"></div>
   </div>
   <div id="caps" style="margin-top:10px"></div>
-  <label for="liveNotes">メモ(会議中に書けます)</label>
+  <label for="liveNotes" id="liveNotesL">メモ(会議中に書けます)</label>
   <textarea id="liveNotes" placeholder="大事な数字・決まったことなど"></textarea>
   <div style="margin-top:12px"><button id="stopBtn" class="primary big" style="background:var(--ng);border-color:var(--ng)">■ 会議を終える</button></div>
 </section>
@@ -170,7 +171,7 @@ h2{font-size:16px;margin:0 0 8px}
     <label for="dNotes">メモ(AI はメモの内容を優先します)</label><textarea id="dNotes"></textarea>
   </div>
   <div class="card hidden" id="siteMemo">
-    <h2>🦺 現場メモ(重點・注意事項)</h2>
+    <h2>🗣 通訳メモ(重點・注意事項)</h2>
     <div id="smBody"></div>
     <div class="row" style="margin-top:8px"><button id="smZh">中文</button><button id="smJa">日本語</button><button id="smCopy">📋 コピー</button></div>
     <p class="note" id="smNote">最後のまとめです。正式な議事録が必要なときだけ下の ① を使ってください。</p>
@@ -221,7 +222,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27b</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -343,12 +344,12 @@ function glossCount(){$('#glN').textContent=glossLines(glossMine()).length+gloss
 fetch('glossary.txt').then(r=>r.ok?r.text():'').then(t=>{GLOSS=t;glossCount()}).catch(()=>{});
 $('#myGloss').value=glossMine();$('#myGloss').oninput=()=>{try{LS.setItem('myGloss',$('#myGloss').value)}catch(e){}glossCount()};
 function sitePrompt(){const ctx=gemCtx.length?'\n- 直前の会話(話の流れの参考。もう一度書かない):\n'+gemCtx.map(c=>`  (${c.lang}) ${c.text}`).join('\n'):'';
-  return `この音声は建設現場(半導体工場の配管・溶接工事)で、監督・作業員と話している短い一言です。話された内容を正確に文字起こしして、すぐ訳してください。
-- 言語は日本語か中国語(台湾華語)。現場は騒がしいので、音がはっきりしなくても下の用語集の言葉と似た音なら、その用語として書く
+  return `この音声は、日本で働く台湾の人が、建設現場(半導体工場の配管・溶接工事)や日常生活(病院・役所・銀行・お店・住まい・交通など)で話している短い一言です。話された内容を正確に文字起こしして、すぐ訳してください。
+- 言語は日本語・中国語(台湾華語)・英語のどれか。周りが騒がしいことが多いので、音がはっきりしなくても下の用語集の言葉と似た音なら、その用語として書く
 - 数字・寸法(ミリ、インチ、A)・本数・時間は正確に
 - 周りの機械音・遠くの声は書かない${ctx}
-出力は JSON 配列のみ:[{"lang":"ja" か "zh","text":"話された言葉そのまま","tr":"訳"}]
-- tr:lang が ja なら台湾の現場で通じる繁體中文(用語集の左側の言い方)、zh なら日本の現場で通じる日本語(用語集の右側の言い方)。短く、そのまま口で伝えられる文に
+出力は JSON 配列のみ:[{"lang":"ja" か "zh" か "en","text":"話された言葉そのまま","tr":"訳"}]
+- tr:lang が ja なら台湾の人に通じる繁體中文(用語集の左側の言い方)、zh または en なら日本で通じる日本語(用語集の右側の言い方)。短く、そのまま口で伝えられる文に
 - 中国語は必ず繁體字。発言がない・聞き取れない場合は [] を返す。推測で文章を作らないこと
 用語集(台灣說法=日本語):
 ${glossText()}`}
@@ -389,9 +390,9 @@ async function gemFetch(blob){try{const parts=[{text:gemPrompt()},{inline_data:{
   try{txt=await gemCall(parts,true,20000)}catch(e){if(e.status===400||e.status===401||e.status===403)throw e;await new Promise(ok=>setTimeout(ok,1500));txt=await gemCall(parts,true,20000)}
   let arr=[];try{arr=JSON.parse(txt)}catch(e){const mm=txt.match(/\[[\s\S]*\]/);if(mm)try{arr=JSON.parse(mm[0])}catch(_){}}return {arr:Array.isArray(arr)?arr:[]}}catch(e){return {err:e}}}
 let sbLast=null;
-function siteShow(it){sbLast=it;$('#sbTr').textContent=String(it.tr||it.text);$('#sbSrc').textContent=(it.lang==='zh'?'🇹🇼 ':'🇯🇵 ')+String(it.text);
-  $('#sbTime').textContent=hm5(new Date())+(it.lang==='zh'?' 中 → 日':' 日 → 中');$('#sbSpeak').disabled=!it.tr||!window.speechSynthesis}
-$('#sbSpeak').onclick=()=>{const it=sbLast;if(!it||!it.tr||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(it.tr));u.lang=it.lang==='zh'?'ja-JP':'zh-TW';speechSynthesis.speak(u)}catch(e){}};
+function siteShow(it){sbLast=it;$('#sbTr').textContent=String(it.tr||it.text);$('#sbSrc').textContent=(it.lang==='zh'?'🇹🇼 ':it.lang==='en'?'🇬🇧 ':'🇯🇵 ')+String(it.text);
+  $('#sbTime').textContent=hm5(new Date())+(it.lang==='zh'?' 中 → 日':it.lang==='en'?' 英 → 日':' 日 → 中');$('#sbSpeak').disabled=!it.tr||!window.speechSynthesis}
+$('#sbSpeak').onclick=()=>{const it=sbLast;if(!it||!it.tr||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(it.tr));u.lang=it.lang==='ja'?'zh-TW':'ja-JP';speechSynthesis.speak(u)}catch(e){}};
 function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;lastErr=e.message;if(cur===m&&gemFail>=2)$('#fallBox').classList.remove('hidden');if(cur===m){
    if(e.status===429)warn('Gemini の無料の上限に達しました。録音は続いています。次の会議は通常モードで使ってください');
    else if(e.status===400||e.status===403)warn('Gemini の API キーが使えません(詳細設定を確認)。録音は続いています');
@@ -433,17 +434,17 @@ function startSR(){if(!SR||!cur)return;itStart=0;const r=new SR();rec=r;r.lang=l
     else if(e.error==='audio-capture')warn('字幕用にマイクが使えません。「字幕だけ」または「録音だけ」モードをお試しください')};
   r.onend=()=>{if(rec===r)rec=null;interimEl&&(interimEl.textContent='');if(cur&&cur.useCap&&document.visibilityState==='visible')setTimeout(()=>{if(cur&&!rec)startSR()},250)};
   try{r.start()}catch(e){rec=null}}
-async function startMeeting(site){site=site===true;if(site&&!gemKey){toast('現場翻訳は Gemini のアクセスコードが必要です(下の ⚙ 詳細設定)');$('#gemSet').open=true;return}
+async function startMeeting(site){site=site===true;if(site&&!gemKey){toast('通訳モードは Gemini のアクセスコードが必要です(下の ⚙ 詳細設定)');$('#gemSet').open=true;return}
   if(!(site&&LS2.get('siteOK',''))&&!confirm('相手の方に「録音・文字起こしをする」ことを伝えて、了承をもらいましたか?'))return;if(site)LS2.set('siteOK','1');
   let mode=site?'gem':$('#mode').value==='gem'&&!gemKey?'both':$('#mode').value;
   if(!navigator.onLine&&mode!=='rec'){mode='rec';toast('ネットに接続していないので「録音だけ」で始めます')}
   if(mode==='gem'){$('#startBtn').disabled=true;$('#startBtn').textContent='Gemini に接続確認中…';
     try{await gemCall([{text:'「OK」とだけ返してください。'}],false,8000)}
     catch(e){const ok=confirm('Gemini を使えません:'+e.message+(e.status===503||e.status===500||e.status===429||e.status===404?'':'\n会社の Wi-Fi などで制限されている可能性があります。')+'\n\n「OK」:通常モード(録音＋字幕・言語は手動切り替え)で始める\n「キャンセル」:始めない(モバイル通信に切り替えてからもう一度)');
-      if(!ok||site){$('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める';if(site)toast('Gemini を使えないので現場翻訳を始められません');return}mode='both';toast('通常モードで始めます')}
+      if(!ok||site){$('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める';if(site)toast('Gemini を使えないので通訳モードを始められません');return}mode='both';toast('通常モードで始めます')}
     $('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める'}const isGem=mode==='gem';const useRec=mode!=='cap',useCap=!isGem&&mode!=='rec'&&!!SR;
   if(!useRec&&!useCap){toast('このブラウザでは字幕が使えません。「録音」モードを選んでください');return}
-  const now=Date.now();cur={id:now,start:now,site,name:site?`現場 ${new Date(now).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:($('#newName').value.trim()||`${new Date(now).toLocaleDateString('ja-JP')} 会議`),notes:'',summary:'',lines:[],langs:[{t:0,lang}],mode,gem:isGem,duration:0,status:'recording',audio:null,mime:'',useCap};
+  const now=Date.now();cur={id:now,start:now,site,name:site?`通訳 ${new Date(now).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:($('#newName').value.trim()||`${new Date(now).toLocaleDateString('ja-JP')} 会議`),notes:'',summary:'',lines:[],langs:[{t:0,lang}],mode,gem:isGem,duration:0,status:'recording',audio:null,mime:'',useCap};
   if(useRec){try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch(e){toast('マイクを使えません:'+e.message);cur=null;return}
     const mime=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
     try{mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream)}catch(e){toast('この端末では録音できません:'+e.message);stream.getTracks().forEach(t=>t.stop());cur=null;return}
@@ -455,7 +456,7 @@ async function startMeeting(site){site=site===true;if(site&&!gemKey){toast('現�
   $('#liveNotes').value='';$('#liveWarn').classList.add('hidden');
   $('#liveMode').textContent={both:'録音中・字幕あり',cap:'字幕のみ(録音なし)',rec:'録音のみ(字幕なし)',gem:'録音中・自動判定(Gemini)'}[mode];$('#langSeg2').classList.toggle('hidden',isGem);$('#tgtSeg2').classList.toggle('hidden',isGem);
   if(isGem)interimEl.textContent=site?'(話し終わると 2〜4 秒で訳が出ます)':'(言語は自動判定。約 6 秒ごとに字幕が出ます)';
-  $('#siteBig').classList.toggle('hidden',!site);if(site){sbLast=null;$('#sbTr').textContent='';$('#sbSrc').textContent='';$('#sbTime').textContent='話すと、ここに訳が大きく出ます';$('#sbSpeak').disabled=true;$('#liveMode').textContent='🦺 現場翻訳'}dgLang=site?LS2.get('siteLang','zh'):LS2.get('dgLang','ja');
+  $('#siteBig').classList.toggle('hidden',!site);$('#liveNotesL').classList.toggle('hidden',site);$('#liveNotes').classList.toggle('hidden',site);if(site){sbLast=null;$('#sbTr').textContent='';$('#sbSrc').textContent='';$('#sbTime').textContent='話すと、ここに訳が大きく出ます';$('#sbSpeak').disabled=true;$('#liveMode').textContent='🗣 現場・生活の通訳'}dgLang=site?LS2.get('siteLang','zh'):LS2.get('dgLang','ja');
   if(!useCap&&!isGem)interimEl.textContent='(字幕なしモード。録音は続いています)';
   setLangUI();show('live');keepAwake();if(useCap)startSR();dgStart();
   clearInterval(srWatch);if(useCap)srWatch=setInterval(()=>{if(!cur||!rec)return;const t=interimEl.textContent;if(itStart&&(Date.now()-itStart>10000||t.length>90))forceCommit()},1000);
@@ -491,9 +492,9 @@ function dgJson(t){return JSON.parse(String(t).replace(/^\s*```(json)?|```\s*$/g
 // 現場:新しい分だけでなく、直近の会話全体を読み直して「重點・注意事項」を作り直す(聞き間違いは前後の流れで直す)
 function sitePromptDg(m,L,prev){let tx=m.lines.map(l=>`[${(l.time||'').slice(0,5)}] ${l.text}`).join('\n');if(tx.length>6000)tx=tx.slice(-6000);
   const terms=glossText().split('\n').filter(r=>r.split(/[=、]/).some(w=>w.length>=2&&tx.includes(w))).slice(0,80).join('\n');
-  return `あなたは建設現場(半導体工場の配管・溶接工事)で通訳をしている人を手伝います。下は現場での会話の文字起こしです(音声認識なので誤字・聞き間違いがある。用語集と前後の流れから正しい意味に直して読む)。会話全体を読んで JSON {"points":[],"cautions":[]} を出してください。
-- points: 剛才談的重點。決まったこと・指示された作業・数字(寸法・本数・時間)・誰が何をするか。結論が先。最近の話を優先。最大 5 個、各 1 文
-- cautions: 要注意的事項。安全・禁止事項・やり直しになりそうな点・まだ確認が必要なこと。最大 4 個、各 1 文
+  return `あなたは建設現場(半導体工場の配管・溶接工事)や日常生活(病院・役所・お店など)で通訳をしている人を手伝います。下はその会話の文字起こしです(音声認識なので誤字・聞き間違いがある。用語集と前後の流れから正しい意味に直して読む)。会話全体を読んで JSON {"points":[],"cautions":[]} を出してください。
+- points: 剛才談的重點。決まったこと・指示や頼まれたこと・数字(寸法・金額・日時・本数)・誰が何をするか・必要な持ち物や書類。結論が先。最近の話を優先。最大 5 個、各 1 文
+- cautions: 要注意的事項。安全・禁止事項・期限・やり直しや誤解になりそうな点・まだ確認が必要なこと。最大 4 個、各 1 文
 会話にないことは書かない。なければ空の配列。すべて${L.name}で書く。用語は${L.name==='日本語'?'用語集の右側(日本の現場の言い方)':'用語集の左側(台灣現場的說法)'}を使う。
 `+(m.notes?`メモ:${m.notes.slice(-600)}\n`:'')+(prev?'前回のまとめ(参考。古くなった点は消す):'+JSON.stringify(prev)+'\n':'')+(terms?'用語集:\n'+terms+'\n':'')+'会話:\n'+tx}
 async function dgRun(force){const m=cur;if(!m||!gemKey||dgState==='running')return;m.digests=m.digests||[];
@@ -542,6 +543,9 @@ $('#dgLang').onchange=()=>{dgLang=$('#dgLang').value;LS2.set(cur&&cur.site?'site
 $('#dgInt').onchange=()=>{const v=+$('#dgInt').value;if(cur&&cur.site){siteInt=v;LS2.set('siteInt',v)}else{dgInt=v;LS2.set('dgInt',v)}dgLast=Date.now();dgRender()};
 $('#dgNow').onclick=()=>dgRun(true);
 $('#liveNotes').oninput=()=>{if(cur){cur.notes=$('#liveNotes').value;saveSoon()}};
+function kindUI(k){k=k==='meet'?'meet':'site';LS2.set('homeKind',k);$('#siteCard').classList.toggle('hidden',k!=='site');$('#meetCard').classList.toggle('hidden',k!=='meet');
+  document.querySelectorAll('#kindSeg button').forEach(b=>b.classList.toggle('on',b.dataset.k===k))}
+document.querySelectorAll('#kindSeg button').forEach(b=>b.onclick=()=>kindUI(b.dataset.k));kindUI(LS2.get('homeKind','site'));
 $('#startBtn').onclick=()=>startMeeting(false);$('#siteBtn').onclick=()=>startMeeting(true);
 $('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);clearInterval(srWatch);clearInterval(dgTimer);
   if(rec){const r=rec;rec=null;try{r.stop()}catch(e){}}
