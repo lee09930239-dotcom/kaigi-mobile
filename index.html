@@ -223,7 +223,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27e</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27f</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -303,7 +303,8 @@ if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対
 // ---------- Gemini 自動判定 ----------
 // Gemini はサーバー経由(キーはサーバーだけにある)。gemKey にはアクセスコードが入る
 const GEM_PROXY='https://script.google.com/macros/s/AKfycbzR236ZiZqR4O8ijsN_LzMGZySw21sG3leOo9XTCe5no723caMBbi6Ebsybrrdv4N0D/exec';
-let gemKey='';try{gemKey=LS.getItem('gemCode')||''}catch(e){}
+// 使う人が少ない間は、コード未設定の人も共通コード(DEFAULT_CODE)で Gemini を使う。人数が増えたら '' に戻して個別コードに
+const DEFAULT_CODE='josh-fi39wlsb';let gemKey=DEFAULT_CODE;try{gemKey=LS.getItem('gemCode')||DEFAULT_CODE}catch(e){}
 try{const u=new URL(location.href),c=u.searchParams.get('c');if(c){gemKey=c.trim();LS.setItem('gemCode',gemKey);u.searchParams.delete('c');history.replaceState(null,'',u.pathname+u.search)}}catch(e){}
 async function gp(op,model,body,signal){const r=await fetch(GEM_PROXY,{method:'POST',signal,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({c:gemKey,op,model,body})});
   const o=await r.json();const st=+o.status||500;return {status:st,ok:st>=200&&st<300,json:async()=>o.data||{}}}
