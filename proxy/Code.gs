@@ -4,7 +4,8 @@
  * - スマホは「アクセスコード」を送る。コードごとに 1 日の回数上限あり
  *
  * スクリプト プロパティ:
- *   GEMINI_KEY  … Gemini の API キー
+ *   GEMINI_KEY  … Gemini の API キー。複数あるときはカンマ区切り(例: AIza…1,AIza…2)
+ *                 1 本が上限(429)や混雑(503)のときは自動で次のキーを使う
  *   CODES       … アクセスコード=1日の上限回数 をカンマ区切り。0 は無制限
  *                 例) TK2026=900,JOSH=0   (900 回 ≒ 1 時間)
  */
@@ -14,7 +15,8 @@ function doPost(e) {
   try {
     var req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var props = PropertiesService.getScriptProperties();
-    var key = props.getProperty('GEMINI_KEY');
+    var keys = String(props.getProperty('GEMINI_KEY') || '').split(/[,\s]+/).filter(function (k) { return k; });
+    var key = keys[0];
     if (!key) return err_(500, 'サーバーに Gemini のキーが設定されていません');
     var limit = codeLimit_(props.getProperty('CODES') || '', String(req.c || '').trim());
     if (limit === null) return err_(401, 'アクセスコードが違います');
@@ -30,11 +32,18 @@ function doPost(e) {
     var model = String(req.model || '');
     if (!/^gemini-[\w.\-]+$/.test(model)) return err_(400, 'bad model');
     if (!count_(props, String(req.c).trim(), limit)) return err_(403, '今日の利用上限に達しました。通常モードをお使いください');
-    var g = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
-      method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': key },
-      payload: JSON.stringify(req.body || {}), muteHttpExceptions: true
-    });
-    return out_({ status: g.getResponseCode(), data: safeJson_(g.getContentText()) });
+    // 前回うまくいったキーから順に試す。429(上限)・503/500(混雑)なら次のキーへ
+    var start = parseInt(props.getProperty('KEY_IDX'), 10) || 0, g, code = 0;
+    for (var i = 0; i < keys.length; i++) {
+      var idx = (start + i) % keys.length;
+      g = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
+        method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': keys[idx] },
+        payload: JSON.stringify(req.body || {}), muteHttpExceptions: true
+      });
+      code = g.getResponseCode();
+      if ([429, 500, 503].indexOf(code) < 0) { if (idx !== start) props.setProperty('KEY_IDX', String(idx)); break; }
+    }
+    return out_({ status: code, data: safeJson_(g.getContentText()) });
   } catch (x) {
     return err_(500, 'サーバーエラー: ' + x.message);
   }

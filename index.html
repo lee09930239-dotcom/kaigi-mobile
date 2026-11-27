@@ -71,6 +71,7 @@ h2{font-size:16px;margin:0 0 8px}
 .dgb.points{border-color:var(--ok)}.dgb.cautions{border-color:var(--ng)}
 #siteBig{background:var(--card);border:2px solid var(--warn);border-radius:14px;padding:12px 14px;margin-top:10px}
 #siteBig .tr{font-size:26px;font-weight:700;line-height:1.4}#siteBig .src{font-size:15px;color:var(--sub);margin-top:4px}
+#siteBig .eng{font-size:13px;font-weight:600;margin-bottom:4px}#siteBig .eng.basic{color:var(--warn)}#siteBig .eng.gem{color:var(--ok)}
 #siteBig .hd{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub)}#siteBig .hd span{flex:1}#siteBig .hd button{min-height:36px;padding:4px 12px}
 .dgb.direction{border-color:var(--pri)}.dgb.agreed{border-color:var(--ok)}.dgb.open{border-color:var(--warn)}.dgb.now li{font-size:15px}
 #dgTurn{margin:8px 0 10px;padding:8px 10px;border:2px solid var(--pri);border-radius:10px}#dgTurn .tw{font-size:12px;color:var(--sub);margin-bottom:3px}#dgTurn .tc{font-size:19px;font-weight:bold;line-height:1.45}#dgTurn ul{margin:4px 0 0 18px;padding:0}#dgTurn li{font-size:16px;margin:2px 0}
@@ -79,16 +80,16 @@ h2{font-size:16px;margin:0 0 8px}
 </style>
 </head>
 <body>
-<header><h1>🎙 会議字幕 モバイル</h1><button id="backBtn" class="hidden">← 一覧</button></header>
+<header><h1>🎙 会議字幕 モバイル</h1><select id="uiLang" style="width:auto;padding:4px 6px;font-size:13px" aria-label="Language"><option value="ja">日本語</option><option value="zh">中文</option><option value="en">English</option></select><button id="backBtn" class="hidden">← 一覧</button></header>
 
 <!-- ホーム -->
 <section id="home">
-  <div class="seg" id="kindSeg" style="margin-top:6px"><button data-k="site">🗣 現場・生活の通訳</button><button data-k="meet">🎙 会議</button></div>
+  <div class="seg" id="kindSeg" style="margin-top:6px"><button data-k="site">🗣 即時翻訳</button><button data-k="meet">🎙 会議</button></div>
   <div class="card" id="siteCard">
-    <button id="siteBtn" class="primary big" style="background:var(--warn);border-color:var(--warn)">🗣 すぐ通訳 / 立即翻譯</button>
-    <p class="note">現場や生活の中の、急な短い会話用(現場監督・作業員、病院、役所、お店など)。話すとすぐ訳を大きく出し(中文 → 日本語、日本語 → 中文、English → 日本語)、1 分ごとに「重點・注意事項」をまとめます。配管・溶接・生活の用語集を使って聞き取ります(Gemini のアクセスコードが必要)。</p>
-    <details><summary class="note">📖 自分の用語を追加(用語集 <span id="glN">0</span> 語)</summary>
-      <p class="note">1 行に「中文=日本語」(例:二次配=二次配管)。いくつかの言い方は「、」で区切る。このスマホに保存され、次の一言から使われます。</p>
+    <button id="siteBtn" class="primary big" style="background:var(--warn);border-color:var(--warn)">🗣 即時翻訳を始める</button>
+    <p class="note">現場・病院・役所・お店などの短い会話を、その場で翻訳します。1 分ごとに要点と注意事項をまとめます。</p>
+    <details><summary class="note">📖 自分の用語を追加</summary>
+      <p class="note">1 行に 1 つ「中文=日本語」(例:二次配=二次配管)</p>
       <textarea id="myGloss" placeholder="中文=日本語" style="min-height:80px"></textarea></details>
   </div>
   <div class="card" id="meetCard">
@@ -149,7 +150,7 @@ h2{font-size:16px;margin:0 0 8px}
   <div class="seg" id="tgtSeg2" style="margin-top:6px"><button data-t="auto">訳:自動</button><button data-t="ja">訳:日</button><button data-t="zh-TW">訳:中</button><button data-t="off">訳なし</button></div>
   <p class="warn hidden" id="liveWarn"></p>
   <div id="fallBox" class="hidden" style="margin:8px 0"><button id="toManual" class="primary" style="width:100%">手動モードに切り替える(字幕を続ける)</button><p class="note">録音はそのまま続きます。自動判定はこの会議では止まります。</p></div>
-  <div id="siteBig" class="hidden"><div class="hd"><span id="sbTime">話すと、ここに訳が大きく出ます</span><button id="sbSpeak" disabled>🔊 読み上げ</button></div><div class="tr" id="sbTr"></div><div class="src" id="sbSrc"></div></div>
+  <div id="siteBig" class="hidden"><div class="eng" id="sbEng"></div><div class="seg hidden" id="siteSpk" style="margin:6px 0"><button data-sl="ja-JP">日本語で話す</button><button data-sl="zh-TW">說中文</button><button data-sl="en-US">English</button></div><div class="hd"><span id="sbTime">話すと、ここに訳が大きく出ます</span><button id="sbSpeak" disabled>🔊 読み上げ</button></div><div class="tr" id="sbTr"></div><div class="src" id="sbSrc"></div></div>
   <div id="dg">
     <div class="hd"><b id="dgTitle">📌 現在の要点</b>
       <select id="dgLang"><option value="ja">日本語</option><option value="zh">中文</option><option value="en">English</option></select>
@@ -171,7 +172,7 @@ h2{font-size:16px;margin:0 0 8px}
     <label for="dNotes">メモ(AI はメモの内容を優先します)</label><textarea id="dNotes"></textarea>
   </div>
   <div class="card hidden" id="siteMemo">
-    <h2>🗣 通訳メモ(重點・注意事項)</h2>
+    <h2>🗣 即時翻訳メモ(要点・注意事項)</h2>
     <div id="smBody"></div>
     <div class="row" style="margin-top:8px"><button id="smZh">中文</button><button id="smJa">日本語</button><button id="smCopy">📋 コピー</button></div>
     <p class="note" id="smNote">最後のまとめです。正式な議事録が必要なときだけ下の ① を使ってください。</p>
@@ -222,7 +223,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27b</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27c</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -294,7 +295,7 @@ function translate(r,el){if(!needTr(r))return;const pair=(SRC[r.lang]||'ja')+'|'
   trQ=trQ.then(async()=>{if(trStop)return;try{const j=await (await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(q)+'&langpair='+encodeURIComponent(pair)+'')).json();
     const t=(j.responseData&&j.responseData.translatedText)||'';
     if(j.quotaFinished||/MYMEMORY WARNING/i.test(t)){trStop=true;warn(trMail?'今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています':'今日の無料翻訳の上限に達しました。字幕(原文)と録音は続いています。次回からはホームの「翻訳の上限を増やす」にメールアドレスを入れてください');return}
-    if(+j.responseStatus!==200||!t)return;r.tr=t;el.textContent='→ '+t;saveSoon()}catch(e){}})}
+    if(+j.responseStatus!==200||!t)return;r.tr=t;el.textContent='→ '+t;if(cur&&cur.site&&cur.lines[cur.lines.length-1]===r)siteShow({lang:r.lang.slice(0,2),text:r.text,tr:t});saveSoon()}catch(e){}})}
 function modeUI(){const g=$('#mode').value==='gem';$('#langBlock').classList.toggle('hidden',g);$('#autoNote').classList.toggle('hidden',!g);0}
 $('#mode').onchange=()=>{try{LS.setItem('mode',$('#mode').value)}catch(e){}modeUI()};
 if(!SR){$('#srErr').textContent='このブラウザは音声認識(字幕)に対応していません。Android は Chrome、iPhone は Safari で開いてください。録音だけは使えます。';$('#srErr').classList.remove('hidden')}
@@ -340,7 +341,7 @@ let gemCtx=[],segRms=[],segT=null,gemQ=Promise.resolve(),gemFail=0,gemIn=0;
 let GLOSS='';const glossMine=()=>{try{return LS.getItem('myGloss')||''}catch(e){return ''}};
 const glossLines=t=>String(t||'').split('\n').map(x=>x.trim()).filter(x=>x&&!x.startsWith('#')&&x.includes('='));
 function glossText(){return [...glossLines(glossMine()),...glossLines(GLOSS)].join('\n')}
-function glossCount(){$('#glN').textContent=glossLines(glossMine()).length+glossLines(GLOSS).length}
+function glossCount(){}
 fetch('glossary.txt').then(r=>r.ok?r.text():'').then(t=>{GLOSS=t;glossCount()}).catch(()=>{});
 $('#myGloss').value=glossMine();$('#myGloss').oninput=()=>{try{LS.setItem('myGloss',$('#myGloss').value)}catch(e){}glossCount()};
 function sitePrompt(){const ctx=gemCtx.length?'\n- 直前の会話(話の流れの参考。もう一度書かない):\n'+gemCtx.map(c=>`  (${c.lang}) ${c.text}`).join('\n'):'';
@@ -382,18 +383,29 @@ function autoCut(m){if(!actx||!abuf.length)return;const sec=abuf.length*abuf[0].
   const mx=m.site?10:8,mn=m.site?1.2:2.5;if(sec>=mx||(sec>=mn&&tail.length===k&&tail.every(v=>v<th)))flushSeg(m)}
 function flushSeg(m){if(!actx||!abuf.length)return;const ch=abuf;abuf=[];segRms=[];const t0=segStart;segStart=elapsed();const {blob,rms}=toWav(ch,actx.sampleRate);
   if(rms<0.004)return;// 無音はスキップ
-  if(!gemSentAt||gemOkAt>gemSentAt)gemSentAt=Date.now();if(gemSentAt&&gemOkAt<gemSentAt&&Date.now()-gemSentAt>40000&&cur===m)$('#fallBox').classList.remove('hidden');
+  if(!gemSentAt||gemOkAt>gemSentAt)gemSentAt=Date.now();if(gemSentAt&&gemOkAt<gemSentAt&&Date.now()-gemSentAt>(m.site?15000:40000)&&cur===m){if(m.site)return siteFallback(m);$('#fallBox').classList.remove('hidden')}
   gemIn++;const pr=gemFetch(blob).finally(()=>gemIn--);if(gemIn>3&&cur===m&&!lastErr)warn('Gemini の応答が遅れています。字幕が少し遅れて出ます');
   if(interimEl&&cur===m)interimEl.textContent='(Gemini が字幕を作成中…)';gemQ=gemQ.then(()=>pr.then(res=>gemRender(m,res,t0)))}
 function stopPCM(m){clearInterval(segT);flushSeg(m);try{aproc&&aproc.disconnect();actx&&actx.close()}catch(e){}actx=null;aproc=null}
 async function gemFetch(blob){try{const parts=[{text:gemPrompt()},{inline_data:{mime_type:blob.type,data:await b64(blob)}}];let txt;
   try{txt=await gemCall(parts,true,20000)}catch(e){if(e.status===400||e.status===401||e.status===403)throw e;await new Promise(ok=>setTimeout(ok,1500));txt=await gemCall(parts,true,20000)}
   let arr=[];try{arr=JSON.parse(txt)}catch(e){const mm=txt.match(/\[[\s\S]*\]/);if(mm)try{arr=JSON.parse(mm[0])}catch(_){}}return {arr:Array.isArray(arr)?arr:[]}}catch(e){return {err:e}}}
-let sbLast=null;
+let sbLast=null,siteRetry=null;
+// 即時翻訳の備え:Gemini(中継)が使えないときは、端末の音声認識+無料翻訳(MyMemory)で最低限の翻訳を続け、2 分ごとに Gemini へ戻れるか試す
+function siteEng(){const m=cur;if(!m||!m.site)return;const g=!!m.gem,e=$('#sbEng');e.className='eng '+(g?'gem':'basic');
+  e.textContent=g?'☁ Gemini で翻訳中':'📱 簡易翻訳中(端末の音声認識＋無料翻訳。精度は下がります)';$('#siteSpk').classList.toggle('hidden',g);
+  document.querySelectorAll('#siteSpk button').forEach(b=>b.classList.toggle('on',b.dataset.sl===lang))}
+function siteFallback(m){if(!m||!m.site||!m.gem||cur!==m)return;stopPCM(m);m.gem=false;m.mode='sitebasic';$('#fallBox').classList.add('hidden');$('#liveWarn').classList.add('hidden');
+  if(SR){m.useCap=true;interimEl.textContent='';startSR()}else warn('Gemini に接続できません。このブラウザは簡易翻訳に対応していません');
+  siteEng();toast('Gemini に接続できないため簡易翻訳に切り替えました');siteRetryStart(m)}
+function siteRetryStart(m){clearInterval(siteRetry);if(!gemKey)return;siteRetry=setInterval(async()=>{if(cur!==m){clearInterval(siteRetry);return}if(m.gem)return;
+  try{await gemCall([{text:'「OK」とだけ返してください。'}],false,8000)}catch(e){return}if(cur!==m||m.gem)return;
+  m.useCap=false;if(rec){const r=rec;rec=null;try{r.abort?r.abort():r.stop()}catch(e){}}m.gem=true;m.mode='gem';gemFail=0;lastErr='';gemOkAt=0;gemSentAt=0;startPCM(m);siteEng();toast('Gemini に戻りました')},120000)}
+document.querySelectorAll('#siteSpk button').forEach(b=>b.onclick=()=>{lang=b.dataset.sl;LS2.set('siteSpk',lang);siteEng();if(rec){try{rec.stop()}catch(e){}}});
 function siteShow(it){sbLast=it;$('#sbTr').textContent=String(it.tr||it.text);$('#sbSrc').textContent=(it.lang==='zh'?'🇹🇼 ':it.lang==='en'?'🇬🇧 ':'🇯🇵 ')+String(it.text);
   $('#sbTime').textContent=hm5(new Date())+(it.lang==='zh'?' 中 → 日':it.lang==='en'?' 英 → 日':' 日 → 中');$('#sbSpeak').disabled=!it.tr||!window.speechSynthesis}
 $('#sbSpeak').onclick=()=>{const it=sbLast;if(!it||!it.tr||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(it.tr));u.lang=it.lang==='ja'?'zh-TW':'ja-JP';speechSynthesis.speak(u)}catch(e){}};
-function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;lastErr=e.message;if(cur===m&&gemFail>=2)$('#fallBox').classList.remove('hidden');if(cur===m){
+function gemRender(m,res,t0){if(res.err){const e=res.err;gemFail++;lastErr=e.message;if(m.site){if(cur===m&&gemFail>=2&&m.gem)siteFallback(m);return}if(cur===m&&gemFail>=2)$('#fallBox').classList.remove('hidden');if(cur===m){
    if(e.status===429)warn('Gemini の無料の上限に達しました。録音は続いています。次の会議は通常モードで使ってください');
    else if(e.status===400||e.status===403)warn('Gemini の API キーが使えません(詳細設定を確認)。録音は続いています');
    else warn('Gemini:'+e.message+'。録音は続いています')}return}
@@ -422,7 +434,7 @@ function warn(t){const w=$('#liveWarn');w.textContent='⚠ '+t;w.classList.remov
 function addLine(text,o={}){const m=o.m||cur;if(!m)return;const t=o.t!=null?o.t:elapsed();const r={t,time:hms(new Date(m.start+t*1000)),lang:o.lang||lang,text:text.trim()};if(o.tr)r.tr=o.tr;if(!r.text)return;m.lines.push(r);
   if(m!==cur){put(m);return}
   lastLineAt=Date.now();
-  const d=document.createElement('div');d.className='ln';d.innerHTML=`<small>${r.time}</small>${esc(r.text)}<div class="trl"></div>`;$('#caps').insertBefore(d,interimEl);$('#caps').scrollTop=1e9;saveSoon();if(o.gem){if(r.tr)d.querySelector('.trl').textContent='→ '+r.tr}else translate(r,d.querySelector('.trl'))}
+  const d=document.createElement('div');d.className='ln';d.innerHTML=`<small>${r.time}</small>${esc(r.text)}<div class="trl"></div>`;$('#caps').insertBefore(d,interimEl);$('#caps').scrollTop=1e9;saveSoon();if(o.gem){if(r.tr)d.querySelector('.trl').textContent='→ '+r.tr}else{if(m.site)siteShow({lang:r.lang.slice(0,2),text:r.text,tr:''});translate(r,d.querySelector('.trl'))}}
 let itStart=0,srWatch=null;
 // 長く話し続けて区切りが来ないとき:途中までを確定して認識をやり直す
 function forceCommit(){const r=rec,t=interimEl&&interimEl.textContent.trim();if(!r||!t)return;r._skip=true;itStart=0;addLine(t);interimEl.textContent='';try{r.abort?r.abort():r.stop()}catch(e){}}
@@ -434,17 +446,17 @@ function startSR(){if(!SR||!cur)return;itStart=0;const r=new SR();rec=r;r.lang=l
     else if(e.error==='audio-capture')warn('字幕用にマイクが使えません。「字幕だけ」または「録音だけ」モードをお試しください')};
   r.onend=()=>{if(rec===r)rec=null;interimEl&&(interimEl.textContent='');if(cur&&cur.useCap&&document.visibilityState==='visible')setTimeout(()=>{if(cur&&!rec)startSR()},250)};
   try{r.start()}catch(e){rec=null}}
-async function startMeeting(site){site=site===true;if(site&&!gemKey){toast('通訳モードは Gemini のアクセスコードが必要です(下の ⚙ 詳細設定)');$('#gemSet').open=true;return}
+async function startMeeting(site){site=site===true;if(site&&!gemKey&&!SR){toast('このブラウザでは翻訳できません。Android は Chrome、iPhone は Safari で開いてください');return}
   if(!(site&&LS2.get('siteOK',''))&&!confirm('相手の方に「録音・文字起こしをする」ことを伝えて、了承をもらいましたか?'))return;if(site)LS2.set('siteOK','1');
-  let mode=site?'gem':$('#mode').value==='gem'&&!gemKey?'both':$('#mode').value;
+  let mode=site?(gemKey?'gem':'sitebasic'):$('#mode').value==='gem'&&!gemKey?'both':$('#mode').value;
   if(!navigator.onLine&&mode!=='rec'){mode='rec';toast('ネットに接続していないので「録音だけ」で始めます')}
   if(mode==='gem'){$('#startBtn').disabled=true;$('#startBtn').textContent='Gemini に接続確認中…';
     try{await gemCall([{text:'「OK」とだけ返してください。'}],false,8000)}
-    catch(e){const ok=confirm('Gemini を使えません:'+e.message+(e.status===503||e.status===500||e.status===429||e.status===404?'':'\n会社の Wi-Fi などで制限されている可能性があります。')+'\n\n「OK」:通常モード(録音＋字幕・言語は手動切り替え)で始める\n「キャンセル」:始めない(モバイル通信に切り替えてからもう一度)');
-      if(!ok||site){$('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める';if(site)toast('Gemini を使えないので通訳モードを始められません');return}mode='both';toast('通常モードで始めます')}
+    catch(e){if(site){mode=SR?'sitebasic':'rec';toast(SR?'Gemini に接続できないので簡易翻訳で始めます':'Gemini に接続できません')}else{const ok=confirm('Gemini を使えません:'+e.message+(e.status===503||e.status===500||e.status===429||e.status===404?'':'\n会社の Wi-Fi などで制限されている可能性があります。')+'\n\n「OK」:通常モード(録音＋字幕・言語は手動切り替え)で始める\n「キャンセル」:始めない(モバイル通信に切り替えてからもう一度)');
+      if(!ok){$('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める';return}mode='both';toast('通常モードで始めます')}}
     $('#startBtn').disabled=false;$('#startBtn').textContent='● 会議を始める'}const isGem=mode==='gem';const useRec=mode!=='cap',useCap=!isGem&&mode!=='rec'&&!!SR;
   if(!useRec&&!useCap){toast('このブラウザでは字幕が使えません。「録音」モードを選んでください');return}
-  const now=Date.now();cur={id:now,start:now,site,name:site?`通訳 ${new Date(now).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:($('#newName').value.trim()||`${new Date(now).toLocaleDateString('ja-JP')} 会議`),notes:'',summary:'',lines:[],langs:[{t:0,lang}],mode,gem:isGem,duration:0,status:'recording',audio:null,mime:'',useCap};
+  const now=Date.now();cur={id:now,start:now,site,name:site?`即時翻訳 ${new Date(now).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:($('#newName').value.trim()||`${new Date(now).toLocaleDateString('ja-JP')} 会議`),notes:'',summary:'',lines:[],langs:[{t:0,lang}],mode,gem:isGem,duration:0,status:'recording',audio:null,mime:'',useCap};
   if(useRec){try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch(e){toast('マイクを使えません:'+e.message);cur=null;return}
     const mime=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
     try{mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream)}catch(e){toast('この端末では録音できません:'+e.message);stream.getTracks().forEach(t=>t.stop());cur=null;return}
@@ -456,7 +468,7 @@ async function startMeeting(site){site=site===true;if(site&&!gemKey){toast('通�
   $('#liveNotes').value='';$('#liveWarn').classList.add('hidden');
   $('#liveMode').textContent={both:'録音中・字幕あり',cap:'字幕のみ(録音なし)',rec:'録音のみ(字幕なし)',gem:'録音中・自動判定(Gemini)'}[mode];$('#langSeg2').classList.toggle('hidden',isGem);$('#tgtSeg2').classList.toggle('hidden',isGem);
   if(isGem)interimEl.textContent=site?'(話し終わると 2〜4 秒で訳が出ます)':'(言語は自動判定。約 6 秒ごとに字幕が出ます)';
-  $('#siteBig').classList.toggle('hidden',!site);$('#liveNotesL').classList.toggle('hidden',site);$('#liveNotes').classList.toggle('hidden',site);if(site){sbLast=null;$('#sbTr').textContent='';$('#sbSrc').textContent='';$('#sbTime').textContent='話すと、ここに訳が大きく出ます';$('#sbSpeak').disabled=true;$('#liveMode').textContent='🗣 現場・生活の通訳'}dgLang=site?LS2.get('siteLang','zh'):LS2.get('dgLang','ja');
+  if(site){tgt='auto';lang=LS2.get('siteSpk','ja-JP')}$('#siteBig').classList.toggle('hidden',!site);$('#liveNotesL').classList.toggle('hidden',site);$('#liveNotes').classList.toggle('hidden',site);if(site){sbLast=null;$('#sbTr').textContent='';$('#sbSrc').textContent='';$('#sbTime').textContent='話すと、ここに訳が大きく出ます';$('#sbSpeak').disabled=true;$('#liveMode').textContent='🗣 即時翻訳';siteEng()}dgLang=site?LS2.get('siteLang','zh'):LS2.get('dgLang','ja');
   if(!useCap&&!isGem)interimEl.textContent='(字幕なしモード。録音は続いています)';
   setLangUI();show('live');keepAwake();if(useCap)startSR();dgStart();
   clearInterval(srWatch);if(useCap)srWatch=setInterval(()=>{if(!cur||!rec)return;const t=interimEl.textContent;if(itStart&&(Date.now()-itStart>10000||t.length>90))forceCommit()},1000);
@@ -468,11 +480,11 @@ $('#toManual').onclick=()=>{const m=cur;if(!m||!m.gem)return;stopPCM(m);m.gem=fa
 const LS2={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 let dgLang=LS2.get('dgLang','ja'),dgInt=+LS2.get('dgInt','180'),dgState='',dgMsg='',dgLast=0,dgTimer=null;
 const DG={zh:{title:'📌 目前重點',direction:'🧭 會議走向',agreed:'✅ 目前共識',open:'❓ 還沒結論・要確認',now:'💬 現在在談',points:'📝 剛才談的重點',cautions:'⚠ 要注意的事項',none:'(還沒有)',hist:'之前的整理',
-    wait:'開始說話後,每隔幾分鐘會在這裡整理會議走向和共識。',upd:'更新',next:'下次',run:'整理中…',tr:'翻譯中…',name:'台灣繁體中文'},
+    wait:'開始說話後,每隔幾分鐘會在這裡整理會議走向和共識。',swait:'開始說話後,每 1～2 分鐘會在這裡整理重點和注意事項。',upd:'更新',next:'下次',run:'整理中…',tr:'翻譯中…',name:'台灣繁體中文'},
   ja:{title:'📌 現在の要点',direction:'🧭 会議の流れ',agreed:'✅ 合意事項',open:'❓ 未決・要確認',now:'💬 今の話題',points:'📝 今の話の要点',cautions:'⚠ 注意事項',none:'(まだなし)',hist:'過去の要点',
-    wait:'話し始めると、数分ごとにここへ会議の流れと合意事項をまとめます。',upd:'更新',next:'次回',run:'まとめ中…',tr:'翻訳中…',name:'日本語'},
+    wait:'話し始めると、数分ごとにここへ会議の流れと合意事項をまとめます。',swait:'話し始めると、1〜2 分ごとにここへ要点と注意事項をまとめます。',upd:'更新',next:'次回',run:'まとめ中…',tr:'翻訳中…',name:'日本語'},
   en:{title:'📌 Key points',direction:'🧭 Direction',agreed:'✅ Agreed',open:'❓ Open / to confirm',now:'💬 Now discussing',points:'📝 Key points',cautions:'⚠ Watch out',none:'(none yet)',hist:'Earlier',
-    wait:'The direction and agreements will be summarized here every few minutes.',upd:'updated',next:'next',run:'Summarizing…',tr:'Translating…',name:'English'}};
+    wait:'The direction and agreements will be summarized here every few minutes.',swait:'Key points and cautions will appear here every 1–2 minutes.',upd:'updated',next:'next',run:'Summarizing…',tr:'Translating…',name:'English'}};
 const DG_KEYS=['direction','agreed','open','now'],SITE_KEYS=['points','cautions'];const keysOf=m=>m&&m.site?SITE_KEYS:DG_KEYS;
 let siteInt=+LS2.get('siteInt','60');const curInt=()=>cur&&cur.site?siteInt:dgInt;
 const hm5=d=>d.toTimeString().slice(0,5);
@@ -482,7 +494,7 @@ function dgRender(){const m=cur,L=DG[dgLang]||DG.ja;$('#dgLang').value=dgLang;$(
   if(!gemKey){$('#dgSt').textContent='';$('#dgBody').innerHTML='<p class="note">ホームの「⚙ 詳細設定」で Gemini のアクセスコードを設定すると、数分ごとに会議の流れと合意事項をここにまとめます。</p>';return}
   const ds=(m&&m.digests)||[],last=ds[ds.length-1];
   $('#dgSt').innerHTML=dgState==='running'?L.run:dgState==='translating'?L.tr:dgState==='error'?'<span class="err">'+esc(dgMsg)+'</span>':last?`${last.time} ${L.upd}`+(curInt()?`・${L.next} ${hm5(new Date(dgLast+curInt()*1000))}`:''):'';
-  if(!last){$('#dgBody').innerHTML=turnHtml()+`<p class="note">${L.wait}</p>`;return}
+  if(!last){$('#dgBody').innerHTML=turnHtml()+`<p class="note">${m&&m.site?L.swait:L.wait}</p>`;return}
   const d=dgData(last,dgLang)||last.data;
   const box=k=>`<div class="dgb ${k}"><h4>${L[k]}</h4>${(d[k]||[]).length?'<ul>'+d[k].map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<div class="none">'+L.none+'</div>'}</div>`;
   const hist=ds.slice(0,-1).reverse().map(it=>{const x=dgData(it,dgLang)||it.data;return `<div class="hi"><b>${it.time}</b> ${esc((x.direction||x.points||[]).join(' / '))}</div>`}).join('');
@@ -547,14 +559,15 @@ function kindUI(k){k=k==='meet'?'meet':'site';LS2.set('homeKind',k);$('#siteCard
   document.querySelectorAll('#kindSeg button').forEach(b=>b.classList.toggle('on',b.dataset.k===k))}
 document.querySelectorAll('#kindSeg button').forEach(b=>b.onclick=()=>kindUI(b.dataset.k));kindUI(LS2.get('homeKind','site'));
 $('#startBtn').onclick=()=>startMeeting(false);$('#siteBtn').onclick=()=>startMeeting(true);
-$('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);clearInterval(srWatch);clearInterval(dgTimer);
+$('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm(cur.site?'終了しますか?':'会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(siteRetry);clearInterval(tick);clearInterval(srWatch);clearInterval(dgTimer);
   if(rec){const r=rec;rec=null;try{r.stop()}catch(e){}}
   if(m.gem){stopPCM(m);m.gem=false;
     toast('最後の字幕を作成中…');await Promise.race([gemQ,new Promise(ok=>setTimeout(ok,40000))]);
-    if(m.site&&m.lines.length){toast('現場メモをまとめています…');const up=(m.digests||[]).slice(-1)[0];if(!up||up.upto<m.lines.length){dgState='';await Promise.race([dgRun(true),new Promise(ok=>setTimeout(ok,30000))])}}}
+    if(m.site&&m.lines.length){toast('要点をまとめています…');const up=(m.digests||[]).slice(-1)[0];if(!up||up.upto<m.lines.length){dgState='';await Promise.race([dgRun(true),new Promise(ok=>setTimeout(ok,30000))])}}}
   else if(interimEl&&interimEl.textContent.trim()&&m.mode!=='rec')addLine(interimEl.textContent);
   if(mr&&mr.state!=='inactive'){await new Promise(ok=>{mr.addEventListener('stop',()=>setTimeout(ok,300),{once:true});mr.stop()})}
   stream&&stream.getTracks().forEach(t=>t.stop());stream=null;mr=null;try{wake&&wake.release()}catch(e){}
+  if(m.site){try{tgt=LS.getItem('tgt2')||'off';lang=LS.getItem('lang')||'ja-JP'}catch(e){}}
   m.duration=elapsed();m.notes=$('#liveNotes').value;{const g=(m.gaps||[])[(m.gaps||[]).length-1];if(g&&g.e==null)g.e=m.duration}cur=null;await finalize(m);await openDetail(m.id);
   if((m.gaps||[]).some(g=>g.e-g.s>=3)&&gemKey&&GEM_PROXY)backfill(m)};
 // 画面が消えていた間(字幕が止まっていた間)の字幕を、録音から Gemini で作る
@@ -701,6 +714,21 @@ $('#backBtn').onclick=async()=>{if(doc)await put(doc);doc=null;show('home');rend
 window.addEventListener('beforeunload',e=>{if(cur){put(cur);e.preventDefault();e.returnValue=''}});
 mergeDev();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+// ---------- 画面の言語(日本語・中文・English) ----------
+const I18N={"zh":{"🎙 会議字幕 モバイル":"🎙 會議字幕 手機版","← 一覧":"← 列表","🗣 即時翻訳":"🗣 即時翻譯","🎙 会議":"🎙 會議","🗣 即時翻訳を始める":"🗣 開始即時翻譯","現場・病院・役所・お店などの短い会話を、その場で翻訳します。1 分ごとに要点と注意事項をまとめます。":"工地、醫院、市公所、商店等場合的簡短對話，當場翻譯。每 1 分鐘整理重點和注意事項。","📖 自分の用語を追加":"📖 新增自己的用語","1 行に 1 つ「中文=日本語」(例:二次配=二次配管)":"一行一組「中文=日本語」(例:二次配=二次配管)","モード":"模式","自動判定(Gemini)おすすめ":"自動判斷(Gemini)推薦","録音 ＋ 字幕":"錄音＋字幕","字幕だけ":"只有字幕","録音だけ":"只錄音","✓ 話している言語(日本語・中文・English)を自動で判定します。":"✓ 自動判斷說話的語言(日文・中文・英文)。","認識する言語":"辨識的語言","日本語":"日文","中文":"中文","会議中でも切り替えできます。話している言語に合わせてください。":"會議中也可以切換，請配合說話的語言。","翻訳(字幕の下に表示)":"翻譯(顯示在字幕下方)","⚠ 翻訳をオンにすると、字幕の文章が外部の無料翻訳サービスに送られます。社外秘の会議では「なし」のままにしてください。":"⚠ 開啟翻譯後，字幕文字會送到外部的免費翻譯服務。機密會議請保持「なし」。","「自動」:日本語の発言は中文に、中文・English の発言は日本語に訳します":"「自動」:日文翻成中文，中文・英文翻成日文","自動":"自動","なし":"不翻譯","翻訳の上限を増やす(無料・おすすめ)":"提高翻譯上限(免費・推薦)","会議名(あとで変更できます)":"會議名稱(之後可以改)","例:〇〇社 打ち合わせ":"例:〇〇公司 開會","● 会議を始める":"● 開始會議","⚠ 画面を消すと、その間の字幕は止まります。会議を終えたあと、録音から自動で字幕を作ります。インターネット接続が必要です。":"⚠ 螢幕關掉時字幕會停止，會議結束後會從錄音自動補上。需要網路。","⚙ 詳細設定:言語の自動判定(Gemini)":"⚙ 進階設定:自動判斷語言(Gemini)","使い方":"用法","注意":"注意","アクセスコード":"存取碼","保存してテスト":"儲存並測試","コードを削除":"刪除存取碼","これまでの会議":"過去的會議","まだありません":"還沒有","記録はこのスマホのこのブラウザの中だけに保存されます(他の人とは共有されません)。":"紀錄只存在這支手機的這個瀏覽器裡(不會和別人共用)。","保存期間(過ぎた会議は自動で削除)":"保存期間(過期的會議自動刪除)","7 日":"7 天","30 日":"30 天","90 日":"90 天","無期限":"永久","🗑 すべての会議を削除":"🗑 刪除全部會議","訳:自動":"譯:自動","訳:日":"譯:日","訳:中":"譯:中","訳なし":"不翻譯","手動モードに切り替える(字幕を続ける)":"切換成手動模式(繼續字幕)","録音はそのまま続きます。自動判定はこの会議では止まります。":"錄音會繼續，這場會議停止自動判斷。","日本語で話す":"說日文","說中文":"說中文","話すと、ここに訳が大きく出ます":"說話後，翻譯會大大地顯示在這裡","🔊 読み上げ":"🔊 念出來","📌 現在の要点":"📌 目前重點","1分ごと":"每 1 分鐘","2分ごと":"每 2 分鐘","3分ごと":"每 3 分鐘","5分ごと":"每 5 分鐘","10分ごと":"每 10 分鐘","自動なし":"不自動","今すぐ":"現在整理","メモ(会議中に書けます)":"備忘(會議中可以寫)","大事な数字・決まったことなど":"重要數字、決定的事等","■ 会議を終える":"■ 結束","会議名":"會議名稱","メモ(AI はメモの内容を優先します)":"備忘(AI 會優先參考備忘)","🗣 即時翻訳メモ(要点・注意事項)":"🗣 即時翻譯紀錄(重點・注意事項)","📋 コピー":"📋 複製","最後のまとめです。正式な議事録が必要なときだけ下の ① を使ってください。":"這是最後一次整理。需要正式議事錄時才用下面的 ①。","AI にまとめてもらう":"請 AI 整理","✨ Gemini で議事録を作る":"✨ 用 Gemini 做議事錄","結果は下の ② に入ります(30 秒〜1 分)。":"結果會放進下面的 ②(30 秒～1 分鐘)。","ホームの「⚙ 詳細設定」で Gemini のアクセスコードを設定すると、ボタン 1 つで議事録を作れます。":"在首頁「⚙ 進階設定」填 Gemini 存取碼，就能一鍵做議事錄。","🔁 字幕のない部分を録音から作る":"🔁 從錄音補上沒有字幕的部分","⚠ 文字起こしがありません。録音ファイルをパソコン版に取り込んでください。":"⚠ 沒有逐字稿，請把錄音檔匯入電腦版。","ChatGPT・Claude などを使う(コピー&貼り付け)":"使用 ChatGPT・Claude 等(複製貼上)","📋 AI 用にコピー":"📋 複製給 AI","ChatGPT を開く":"開啟 ChatGPT","Claude を開く":"開啟 Claude","AI の入力欄を長押し → 「ペースト」→ 送信。回答を ② に貼り付けてください。":"在 AI 輸入欄長按 →「貼上」→ 送出，再把回答貼到 ②。","議事録(ここで直せます・自動保存)":"議事錄(可以在這裡改・自動儲存)","① で作った議事録がここに入ります(ChatGPT などの回答はここに貼り付け)":"① 做好的議事錄會放在這裡(ChatGPT 等的回答貼這裡)","📋 文字をコピー":"📋 複製文字","直したいところ(Gemini が直します)":"想修改的地方(Gemini 會改)","例:もっと短く / 結論を一番上に / 「王さん」は「汪さん」":"例:再短一點 / 結論放最上面 / 「王さん」改成「汪さん」","✏️ Gemini で直す":"✏️ 用 Gemini 修改","議事録をファイルにする":"把議事錄存成檔案","PDF 日本語":"PDF 日文","PDF 中文":"PDF 中文","Word 日本語":"Word 日文","Word 中文":"Word 中文","⬇ 保存する":"⬇ 儲存","⬇ テキスト (.txt)":"⬇ 文字檔 (.txt)","パソコンに送る・保存する":"傳到電腦・儲存","📤 録音を送る":"📤 傳送錄音","⬇ 録音を保存":"⬇ 儲存錄音","⬇ まとめて書き出す (.txt)":"⬇ 全部匯出 (.txt)","⬇ 文字起こし (.txt)":"⬇ 逐字稿 (.txt)","文字起こし":"逐字稿","✏️ 編集":"✏️ 編輯","文字をタップして直せます(自動保存)。🗑 でその行を削除。":"點文字就能修改(自動儲存)。按 🗑 刪除那一行。","🗑 この会議を削除":"🗑 刪除這場會議","バージョン":"版本","🔄 最新版に更新":"🔄 更新到最新版","新しいバージョンがあります":"有新版本","更新する":"更新","☁ Gemini で翻訳中":"☁ 用 Gemini 翻譯中","📱 簡易翻訳中(端末の音声認識＋無料翻訳。精度は下がります)":"📱 簡易翻譯中(手機語音辨識＋免費翻譯，準確度較低)","Gemini に接続できないため簡易翻訳に切り替えました":"連不上 Gemini，已改用簡易翻譯","Gemini に接続できないので簡易翻訳で始めます":"連不上 Gemini，先用簡易翻譯開始","Gemini に戻りました":"已切回 Gemini","(話し終わると 2〜4 秒で訳が出ます)":"(說完 2～4 秒會出現翻譯)","要点をまとめています…":"正在整理重點…","終了しますか?":"要結束嗎?","会議を終えますか?":"要結束會議嗎?","相手の方に「録音・文字起こしをする」ことを伝えて、了承をもらいましたか?":"已告訴對方會「錄音・做逐字稿」並取得同意了嗎?","最後のまとめです。":"最後的整理。","日本語・中国語・英語を自動で判定して、翻訳付きの字幕を出すモードです。Google の Gemini を使います。API キーの準備は不要です。":"自動判斷日文・中文・英文，並顯示附翻譯的字幕。使用 Google 的 Gemini，不需要準備 API 金鑰。","⚠ 現在は Gemini の無料枠を使っているため、送った音声・文字が Google のサービス改善(AI の学習)に使われることがあります。社外秘の会議では通常モードをお使いください。音声は海外(Google)のサーバーに送られます。":"⚠ 目前使用 Gemini 免費額度，送出的聲音和文字可能被 Google 用來改善服務(AI 學習)。機密會議請用一般模式。聲音會送到海外(Google)的伺服器。","メールアドレスを入れると、無料翻訳の上限が 1 日約 10 倍(約 5 万文字)になります。アドレスは翻訳サービス(MyMemory)に送られるだけで、登録や確認メールはありません。":"填電子郵件後，免費翻譯每天上限約變 10 倍(約 5 萬字)。信箱只會送給翻譯服務(MyMemory)，不需註冊也不會收到確認信。","② の議事録を PDF や Word のファイルにして、スマホに保存します(メール・LINE で送れます)。中文は Gemini が日本語から訳します。PDF は印刷画面が開くので「PDF として保存」を選んでください。":"把 ② 的議事錄存成 PDF 或 Word 檔到手機(可用郵件・LINE 傳送)。中文由 Gemini 從日文翻譯。PDF 會開啟列印畫面，請選「儲存為 PDF」。","「送る」で LINE・メール・Google ドライブなどに送れます。パソコン版の「録音を取り込む」で入れると、パソコンで認識し直して翻訳付きの議事録が作れます。":"按「傳送」可傳到 LINE、郵件、Google 雲端硬碟等。用電腦版「匯入錄音」放進去，電腦會重新辨識並做出附翻譯的議事錄。"},"en":{"🎙 会議字幕 モバイル":"🎙 Meeting Captions Mobile","← 一覧":"← List","🗣 即時翻訳":"🗣 Instant translate","🎙 会議":"🎙 Meeting","🗣 即時翻訳を始める":"🗣 Start translating","現場・病院・役所・お店などの短い会話を、その場で翻訳します。1 分ごとに要点と注意事項をまとめます。":"Translates short conversations on the spot (work site, hospital, city office, shops). Sums up key points and cautions every minute.","📖 自分の用語を追加":"📖 Add your own terms","1 行に 1 つ「中文=日本語」(例:二次配=二次配管)":"One per line: Chinese=Japanese (e.g. 二次配=二次配管)","モード":"Mode","自動判定(Gemini)おすすめ":"Auto-detect (Gemini) recommended","録音 ＋ 字幕":"Record + captions","字幕だけ":"Captions only","録音だけ":"Record only","✓ 話している言語(日本語・中文・English)を自動で判定します。":"✓ Detects the spoken language (Japanese, Chinese, English) automatically.","認識する言語":"Language to recognize","日本語":"Japanese","中文":"Chinese","会議中でも切り替えできます。話している言語に合わせてください。":"You can switch during the meeting. Match the language being spoken.","翻訳(字幕の下に表示)":"Translation (shown under captions)","⚠ 翻訳をオンにすると、字幕の文章が外部の無料翻訳サービスに送られます。社外秘の会議では「なし」のままにしてください。":"⚠ With translation on, caption text is sent to an outside free translation service. Keep it off (なし) for confidential meetings.","「自動」:日本語の発言は中文に、中文・English の発言は日本語に訳します":"Auto: Japanese → Chinese, Chinese/English → Japanese","自動":"Auto","なし":"Off","翻訳の上限を増やす(無料・おすすめ)":"Raise the translation limit (free, recommended)","会議名(あとで変更できます)":"Meeting name (can change later)","例:〇〇社 打ち合わせ":"e.g. Meeting with XX","● 会議を始める":"● Start meeting","⚠ 画面を消すと、その間の字幕は止まります。会議を終えたあと、録音から自動で字幕を作ります。インターネット接続が必要です。":"⚠ Captions stop while the screen is off; they are filled in from the recording afterwards. Internet required.","⚙ 詳細設定:言語の自動判定(Gemini)":"⚙ Advanced: auto language detection (Gemini)","使い方":"How to use","注意":"Notes","アクセスコード":"Access code","保存してテスト":"Save and test","コードを削除":"Delete code","これまでの会議":"Past meetings","まだありません":"None yet","記録はこのスマホのこのブラウザの中だけに保存されます(他の人とは共有されません)。":"Records are saved only in this browser on this phone (not shared).","保存期間(過ぎた会議は自動で削除)":"Keep for (older meetings are deleted)","7 日":"7 days","30 日":"30 days","90 日":"90 days","無期限":"Forever","🗑 すべての会議を削除":"🗑 Delete all meetings","訳:自動":"Tr: auto","訳:日":"Tr: JA","訳:中":"Tr: ZH","訳なし":"No tr","手動モードに切り替える(字幕を続ける)":"Switch to manual mode (keep captions)","録音はそのまま続きます。自動判定はこの会議では止まります。":"Recording continues. Auto-detect stops for this meeting.","日本語で話す":"Speak Japanese","說中文":"Speak Chinese","話すと、ここに訳が大きく出ます":"Speak, and the translation appears here in large text","🔊 読み上げ":"🔊 Read aloud","📌 現在の要点":"📌 Key points","1分ごと":"Every 1 min","2分ごと":"Every 2 min","3分ごと":"Every 3 min","5分ごと":"Every 5 min","10分ごと":"Every 10 min","自動なし":"No auto","今すぐ":"Now","メモ(会議中に書けます)":"Notes (you can write during the meeting)","大事な数字・決まったことなど":"Key numbers, decisions, etc.","■ 会議を終える":"■ Stop","会議名":"Meeting name","メモ(AI はメモの内容を優先します)":"Notes (AI gives these priority)","🗣 即時翻訳メモ(要点・注意事項)":"🗣 Translation memo (key points, cautions)","📋 コピー":"📋 Copy","最後のまとめです。正式な議事録が必要なときだけ下の ① を使ってください。":"This is the last summary. Use ① below only if you need formal minutes.","AI にまとめてもらう":"Have AI summarize","✨ Gemini で議事録を作る":"✨ Make minutes with Gemini","結果は下の ② に入ります(30 秒〜1 分)。":"The result goes into ② below (30 s–1 min).","ホームの「⚙ 詳細設定」で Gemini のアクセスコードを設定すると、ボタン 1 つで議事録を作れます。":"Set a Gemini access code in ⚙ Advanced on the home screen to make minutes with one tap.","🔁 字幕のない部分を録音から作る":"🔁 Fill missing captions from the recording","⚠ 文字起こしがありません。録音ファイルをパソコン版に取り込んでください。":"⚠ No transcript. Import the recording into the PC version.","ChatGPT・Claude などを使う(コピー&貼り付け)":"Use ChatGPT, Claude, etc. (copy & paste)","📋 AI 用にコピー":"📋 Copy for AI","ChatGPT を開く":"Open ChatGPT","Claude を開く":"Open Claude","AI の入力欄を長押し → 「ペースト」→ 送信。回答を ② に貼り付けてください。":"Long-press the AI input → Paste → Send. Paste the answer into ②.","議事録(ここで直せます・自動保存)":"Minutes (edit here, auto-saved)","① で作った議事録がここに入ります(ChatGPT などの回答はここに貼り付け)":"Minutes from ① go here (paste ChatGPT answers here)","📋 文字をコピー":"📋 Copy text","直したいところ(Gemini が直します)":"What to change (Gemini will edit)","例:もっと短く / 結論を一番上に / 「王さん」は「汪さん」":"e.g. shorter / conclusion first / fix a name","✏️ Gemini で直す":"✏️ Edit with Gemini","議事録をファイルにする":"Save minutes as a file","PDF 日本語":"PDF Japanese","PDF 中文":"PDF Chinese","Word 日本語":"Word Japanese","Word 中文":"Word Chinese","⬇ 保存する":"⬇ Save","⬇ テキスト (.txt)":"⬇ Text (.txt)","パソコンに送る・保存する":"Send to PC / save","📤 録音を送る":"📤 Send recording","⬇ 録音を保存":"⬇ Save recording","⬇ まとめて書き出す (.txt)":"⬇ Export all (.txt)","⬇ 文字起こし (.txt)":"⬇ Transcript (.txt)","文字起こし":"Transcript","✏️ 編集":"✏️ Edit","文字をタップして直せます(自動保存)。🗑 でその行を削除。":"Tap text to edit (auto-saved). 🗑 deletes the line.","🗑 この会議を削除":"🗑 Delete this meeting","バージョン":"Version","🔄 最新版に更新":"🔄 Update","新しいバージョンがあります":"A new version is available","更新する":"Update","☁ Gemini で翻訳中":"☁ Translating with Gemini","📱 簡易翻訳中(端末の音声認識＋無料翻訳。精度は下がります)":"📱 Basic translation (phone speech recognition + free translator; less accurate)","Gemini に接続できないため簡易翻訳に切り替えました":"Can't reach Gemini; switched to basic translation","Gemini に接続できないので簡易翻訳で始めます":"Can't reach Gemini; starting with basic translation","Gemini に戻りました":"Back to Gemini","(話し終わると 2〜4 秒で訳が出ます)":"(Translation appears 2–4 s after you finish)","要点をまとめています…":"Summarizing…","終了しますか?":"Stop now?","会議を終えますか?":"End the meeting?","相手の方に「録音・文字起こしをする」ことを伝えて、了承をもらいましたか?":"Did you tell the other side you are recording/transcribing and get their OK?","最後のまとめです。":"Last summary.","日本語・中国語・英語を自動で判定して、翻訳付きの字幕を出すモードです。Google の Gemini を使います。API キーの準備は不要です。":"Detects Japanese/Chinese/English and shows translated captions, using Google Gemini. No API key needed.","⚠ 現在は Gemini の無料枠を使っているため、送った音声・文字が Google のサービス改善(AI の学習)に使われることがあります。社外秘の会議では通常モードをお使いください。音声は海外(Google)のサーバーに送られます。":"⚠ This uses Gemini's free tier, so audio and text may be used by Google to improve its services (AI training). Use normal mode for confidential meetings. Audio is sent to Google's servers abroad.","メールアドレスを入れると、無料翻訳の上限が 1 日約 10 倍(約 5 万文字)になります。アドレスは翻訳サービス(MyMemory)に送られるだけで、登録や確認メールはありません。":"Entering an email raises the free translation limit about 10x per day (~50,000 chars). It is only sent to the translator (MyMemory); no sign-up or confirmation mail.","② の議事録を PDF や Word のファイルにして、スマホに保存します(メール・LINE で送れます)。中文は Gemini が日本語から訳します。PDF は印刷画面が開くので「PDF として保存」を選んでください。":"Saves the minutes in ② as PDF or Word on the phone (send by mail/LINE). Chinese is translated from Japanese by Gemini. For PDF, choose 'Save as PDF' in the print screen.","「送る」で LINE・メール・Google ドライブなどに送れます。パソコン版の「録音を取り込む」で入れると、パソコンで認識し直して翻訳付きの議事録が作れます。":"Send to LINE, mail, Google Drive, etc. Import it in the PC version to re-recognize and make translated minutes."}};
+let uiLang='ja';try{uiLang=localStorage.getItem('uiLang')||((navigator.language||'').startsWith('zh')?'zh':(navigator.language||'').startsWith('ja')?'ja':'en')}catch(e){}
+function T(s){const t=I18N[uiLang];if(!t||s==null)return s;const k=String(s).trim();return t[k]?String(s).replace(k,t[k]):s}
+function i18nNode(n){if(n.nodeType===3){if(n._set!==undefined&&n.nodeValue===n._set)return;n._ja=n.nodeValue;const v=T(n._ja);if(v!==n.nodeValue){n._set=v;n.nodeValue=v}else n._set=n.nodeValue;return}
+  if(n.nodeType!==1||n.tagName==='SCRIPT'||n.tagName==='STYLE'||n.tagName==='TEXTAREA')return;
+  for(const a of['placeholder','title']){if(n.hasAttribute&&n.hasAttribute(a)){if(n['_ja_'+a]===undefined||n.getAttribute(a)!==n['_set_'+a])n['_ja_'+a]=n.getAttribute(a);const v=T(n['_ja_'+a]);n['_set_'+a]=v;if(v!==n.getAttribute(a))n.setAttribute(a,v)}}
+  for(const c of n.childNodes)i18nNode(c)}
+function i18nAll(){document.documentElement.lang=uiLang==='zh'?'zh-Hant':uiLang;const w=n=>{if(n.nodeType===3){if(n._ja!==undefined){const v=T(n._ja);n._set=v;n.nodeValue=v}else i18nNode(n);return}
+  if(n.nodeType!==1||n.tagName==='SCRIPT'||n.tagName==='STYLE'||n.tagName==='TEXTAREA')return;for(const a of['placeholder','title'])if(n['_ja_'+a]!==undefined){const v=T(n['_ja_'+a]);n['_set_'+a]=v;n.setAttribute(a,v)}else if(n.hasAttribute(a))i18nNode(n);for(const c of n.childNodes)w(c)};w(document.body)}
+new MutationObserver(ms=>{for(const m of ms){if(m.type==='characterData')i18nNode(m.target);else for(const n of m.addedNodes)i18nNode(n)}}).observe(document.body,{childList:true,subtree:true,characterData:true});
+{const oc=window.confirm.bind(window);window.confirm=m=>oc(T(m))}
+$('#uiLang').value=uiLang;$('#uiLang').onchange=()=>{uiLang=$('#uiLang').value;try{localStorage.setItem('uiLang',uiLang)}catch(e){}i18nAll()};
+i18nAll();
 </script>
 </body>
 </html>
