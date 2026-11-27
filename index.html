@@ -223,7 +223,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27f</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27g</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -315,7 +315,7 @@ async function gemDiscover(){if(gemListed)return;gemListed=true;try{const r=awai
   const ok=(j.models||[]).filter(x=>(x.supportedGenerationMethods||[]).includes('generateContent')).map(x=>String(x.name).replace(/^models\//,'')).filter(n=>/^gemini-[\d.]+-flash(-lite)?$/.test(n));
   const v=n=>parseFloat(n.split('-')[1])||0;ok.sort((a,b)=>(/lite/.test(a)-/lite/.test(b))||(v(b)-v(a)));
   if(ok.length)GEM_MODELS=[...new Set([...ok.slice(0,4),...GEM_MODELS])]}catch(e){}}
-function gemUI(){$('#gemSet').hidden=!GEM_PROXY;if(!GEM_PROXY)gemKey='';$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey;
+function gemUI(){$('#gemSet').hidden=true;if(!GEM_PROXY)gemKey='';$('#gemOpt').hidden=!gemKey;if(gemKey&&!gemUI.done){$('#mode').value='gem';gemUI.done=1}$('#gemBadge').textContent=gemKey?'(設定済み)':'';$('#gemKey').value=gemKey===DEFAULT_CODE?'':gemKey;
   if(!gemKey&&$('#mode').value==='gem')$('#mode').value='both';if(window.modeUI)modeUI()}
 async function gemCall(parts,json,ms=60000){await gemDiscover();let last='',lastSt=0;for(const md of GEM_MODELS){if(gemDead.has(md))continue;const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);
   try{const r=await gp('gen',md,{contents:[{parts}],generationConfig:Object.assign(json?{responseMimeType:'application/json',temperature:0}:{temperature:0},gemThink?{thinkingConfig:{thinkingLevel:'minimal'}}:{})},ac.signal);
