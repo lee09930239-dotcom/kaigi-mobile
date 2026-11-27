@@ -83,14 +83,15 @@ h2{font-size:16px;margin:0 0 8px}
 
 <!-- ホーム -->
 <section id="home">
-  <div class="card">
+  <div class="seg" id="kindSeg" style="margin-top:6px"><button data-k="site">🦺 現場翻訳</button><button data-k="meet">🎙 会議</button></div>
+  <div class="card" id="siteCard">
     <button id="siteBtn" class="primary big" style="background:var(--warn);border-color:var(--warn)">🦺 現場翻訳 / 現場翻譯</button>
     <p class="note">現場監督・作業員との短い会話用。話すとすぐ中⇄日 の訳を大きく出し、1 分ごとに「重點・注意事項」をまとめます。配管・溶接の用語集を使って聞き取ります(Gemini のアクセスコードが必要)。</p>
     <details><summary class="note">📖 自分の用語を追加(用語集 <span id="glN">0</span> 語)</summary>
       <p class="note">1 行に「中文=日本語」(例:二次配=二次配管)。いくつかの言い方は「、」で区切る。このスマホに保存され、次の一言から使われます。</p>
       <textarea id="myGloss" placeholder="中文=日本語" style="min-height:80px"></textarea></details>
   </div>
-  <div class="card">
+  <div class="card" id="meetCard">
     <label for="mode" style="margin-top:0">モード</label>
     <select id="mode">
       <option value="gem" id="gemOpt" hidden>自動判定(Gemini)おすすめ</option>
@@ -157,7 +158,7 @@ h2{font-size:16px;margin:0 0 8px}
     <div id="dgSt"></div><div id="dgBody"></div>
   </div>
   <div id="caps" style="margin-top:10px"></div>
-  <label for="liveNotes">メモ(会議中に書けます)</label>
+  <label for="liveNotes" id="liveNotesL">メモ(会議中に書けます)</label>
   <textarea id="liveNotes" placeholder="大事な数字・決まったことなど"></textarea>
   <div style="margin-top:12px"><button id="stopBtn" class="primary big" style="background:var(--ng);border-color:var(--ng)">■ 会議を終える</button></div>
 </section>
@@ -221,7 +222,7 @@ h2{font-size:16px;margin:0 0 8px}
   <button id="delBtn" class="danger" style="width:100%">🗑 この会議を削除</button>
 </section>
 
-<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27a</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
+<p class="note" style="text-align:center;margin-top:24px">バージョン <span id="ver">2026-11-27b</span> <button id="updBtn" style="min-height:34px;padding:4px 10px;margin-left:6px">🔄 最新版に更新</button></p>
 <div id="updBar" class="hidden" style="position:fixed;left:0;right:0;top:0;background:var(--pri);color:#fff;padding:12px 16px;z-index:8;display:flex;gap:10px;align-items:center"><span style="flex:1">新しいバージョンがあります</span><button id="updNow" style="min-height:38px;color:var(--pri)">更新する</button></div>
 <div id="toast"></div>
 
@@ -455,7 +456,7 @@ async function startMeeting(site){site=site===true;if(site&&!gemKey){toast('現�
   $('#liveNotes').value='';$('#liveWarn').classList.add('hidden');
   $('#liveMode').textContent={both:'録音中・字幕あり',cap:'字幕のみ(録音なし)',rec:'録音のみ(字幕なし)',gem:'録音中・自動判定(Gemini)'}[mode];$('#langSeg2').classList.toggle('hidden',isGem);$('#tgtSeg2').classList.toggle('hidden',isGem);
   if(isGem)interimEl.textContent=site?'(話し終わると 2〜4 秒で訳が出ます)':'(言語は自動判定。約 6 秒ごとに字幕が出ます)';
-  $('#siteBig').classList.toggle('hidden',!site);if(site){sbLast=null;$('#sbTr').textContent='';$('#sbSrc').textContent='';$('#sbTime').textContent='話すと、ここに訳が大きく出ます';$('#sbSpeak').disabled=true;$('#liveMode').textContent='🦺 現場翻訳'}dgLang=site?LS2.get('siteLang','zh'):LS2.get('dgLang','ja');
+  $('#siteBig').classList.toggle('hidden',!site);$('#liveNotesL').classList.toggle('hidden',site);$('#liveNotes').classList.toggle('hidden',site);if(site){sbLast=null;$('#sbTr').textContent='';$('#sbSrc').textContent='';$('#sbTime').textContent='話すと、ここに訳が大きく出ます';$('#sbSpeak').disabled=true;$('#liveMode').textContent='🦺 現場翻訳'}dgLang=site?LS2.get('siteLang','zh'):LS2.get('dgLang','ja');
   if(!useCap&&!isGem)interimEl.textContent='(字幕なしモード。録音は続いています)';
   setLangUI();show('live');keepAwake();if(useCap)startSR();dgStart();
   clearInterval(srWatch);if(useCap)srWatch=setInterval(()=>{if(!cur||!rec)return;const t=interimEl.textContent;if(itStart&&(Date.now()-itStart>10000||t.length>90))forceCommit()},1000);
@@ -542,6 +543,9 @@ $('#dgLang').onchange=()=>{dgLang=$('#dgLang').value;LS2.set(cur&&cur.site?'site
 $('#dgInt').onchange=()=>{const v=+$('#dgInt').value;if(cur&&cur.site){siteInt=v;LS2.set('siteInt',v)}else{dgInt=v;LS2.set('dgInt',v)}dgLast=Date.now();dgRender()};
 $('#dgNow').onclick=()=>dgRun(true);
 $('#liveNotes').oninput=()=>{if(cur){cur.notes=$('#liveNotes').value;saveSoon()}};
+function kindUI(k){k=k==='meet'?'meet':'site';LS2.set('homeKind',k);$('#siteCard').classList.toggle('hidden',k!=='site');$('#meetCard').classList.toggle('hidden',k!=='meet');
+  document.querySelectorAll('#kindSeg button').forEach(b=>b.classList.toggle('on',b.dataset.k===k))}
+document.querySelectorAll('#kindSeg button').forEach(b=>b.onclick=()=>kindUI(b.dataset.k));kindUI(LS2.get('homeKind','site'));
 $('#startBtn').onclick=()=>startMeeting(false);$('#siteBtn').onclick=()=>startMeeting(true);
 $('#stopBtn').onclick=async()=>{if(!cur)return;if(!confirm('会議を終えますか?'))return;const m=cur;m.useCap=false;clearInterval(tick);clearInterval(srWatch);clearInterval(dgTimer);
   if(rec){const r=rec;rec=null;try{r.stop()}catch(e){}}
