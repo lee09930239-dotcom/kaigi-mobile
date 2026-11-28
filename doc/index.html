@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>文件翻譯工具</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1d2430;--mut:#6a7383;--line:#dde1e7;--acc:#1f6feb;--acc2:#e8f0fe;--ok:#1a7f37;--warn:#b35900;--err:#c62828}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1d2128;--fg:#e6e9ee;--mut:#9aa3b1;--line:#333a45;--acc:#5b9dff;--acc2:#1f2b3d;--ok:#4cc26a;--warn:#f0a040;--err:#ff6b6b}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1d2128;--fg:#e6e9ee;--mut:#9aa3b1;--line:#333a45;--acc:#5b9dff;--acc2:#1f2b3d;--ok:#4cc26a;--warn:#f0a040;--err:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,-apple-system,"Segoe UI","Microsoft JhengHei","Yu Gothic UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:4px 0 2px}
+.sub{color:var(--mut);margin:0 0 16px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+#drop{border:2px dashed var(--line);border-radius:12px;padding:28px 12px;text-align:center;cursor:pointer;background:var(--card)}
+#drop.on{border-color:var(--acc);background:var(--acc2)}
+#drop b{font-size:17px}
+#drop small{display:block;color:var(--mut);margin-top:4px}
+.row{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+label{display:inline-flex;gap:6px;align-items:center}
+select{font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
+button{font:inherit;border:0;border-radius:10px;padding:10px 18px;background:var(--acc);color:#fff;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.sec{background:transparent;color:var(--acc);border:1px solid var(--line);padding:6px 12px}
+#files{list-style:none;padding:0;margin:10px 0 0}
+#files li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+#files li span:last-child{color:var(--mut);white-space:nowrap}
+#log{font-size:13px;color:var(--mut);white-space:pre-wrap;max-height:260px;overflow:auto;margin:0}
+#log .ok{color:var(--ok)}#log .warn{color:var(--warn)}#log .err{color:var(--err)}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .3s}
+#out a{display:block;padding:8px 0;color:var(--acc);font-weight:600;word-break:break-all}
+.note{font-size:12.5px;color:var(--mut)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<h1>文件翻譯工具 <span style="font-size:14px;color:var(--mut)">ドキュメント翻訳</span></h1>
+<p class="sub">Word・Excel・PowerPoint・PDF ／ 中文 ⇄ 日本語 ⇄ English ／ 檔案只在這台電腦的瀏覽器裡處理，不會上傳保存</p>
+
+<div id="drop" tabindex="0"><b>把檔案拖到這裡，或點一下選檔案</b><small>.docx .xlsx .pptx .pdf（可一次多個）／ファイルをドロップ</small></div>
+<input id="pick" type="file" multiple accept=".docx,.xlsx,.pptx,.pdf" hidden>
+<ul id="files"></ul>
+
+<div class="card">
+  <div class="row">
+    <label>翻成 <select id="tgt">
+      <option value="auto">自動（中→日、日→中）</option>
+      <option value="ja">日本語</option>
+      <option value="zh">繁體中文</option>
+      <option value="en">English</option>
+      <option value="none">不翻譯，只轉檔</option>
+    </select></label>
+    <label>PDF 轉成 <select id="pdfFmt">
+      <option value="auto">自動判斷原本格式</option>
+      <option value="docx">Word</option>
+      <option value="pptx">PowerPoint</option>
+      <option value="xlsx">Excel</option>
+    </select></label>
+    <label><input type="checkbox" id="bi" checked> 另外產生原文對照檔</label>
+  </div>
+  <div style="margin-top:14px"><button id="go" disabled>開始</button></div>
+  <div class="bar"><i id="bar"></i></div>
+  <pre id="log"></pre>
+</div>
+
+<div class="card hidden" id="outCard"><b>完成，點一下下載</b><div id="out"></div></div>
+
+<p class="note">翻譯用 Gemini（套用配管名詞對照表），Gemini 無法使用時自動改用 Google 翻譯，並在對照檔標成黃色。圖片裡的文字不翻譯。PDF 轉檔不使用 AI，複雜的版面可能會有些跑位。</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script>
+'use strict';
+const VERSION='2026-11-28a';
+const PDFJS='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
+// Gemini はサーバー(GAS 中繼)経由。API キーは GAS の「指令碼屬性」にだけある
+const PROXY='https://script.google.com/macros/s/AKfycbzR236ZiZqR4O8ijsN_LzMGZySw21sG3leOo9XTCe5no723caMBbi6Ebsybrrdv4N0D/exec';
+const CODE='josh-fi39wlsb';
+const $=s=>document.querySelector(s);
+const LANG={ja:{name:'日本語（ビジネス文書）',gt:'ja',font:'Yu Gothic'},zh:{name:'繁體中文（台灣用語）',gt:'zh-TW',font:'Microsoft JhengHei'},en:{name:'English',gt:'en',font:'Calibri'}};
+const KANA=/[぀-ヿ]/, CJK=/[㐀-鿿豈-﫿]/;
+let files=[];
+
+// ---------- UI ----------
+const LS=(()=>{try{return localStorage}catch(e){return null}})();
+try{for(const k of ['tgt','pdfFmt']){const v=LS&&LS.getItem('dt_'+k);if(v)$('#'+k).value=v;$('#'+k).onchange=()=>{try{LS.setItem('dt_'+k,$('#'+k).value)}catch(e){}}}}catch(e){}
+const drop=$('#drop');
+drop.onclick=()=>$('#pick').click();
+drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' ')$('#pick').click()};
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('on')};
+drop.ondragleave=()=>drop.classList.remove('on');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('on');addFiles(e.dataTransfer.files)};
+$('#pick').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+function extOf(n){return (n.split('.').pop()||'').toLowerCase()}
+function addFiles(list){for(const f of list){if(['docx','xlsx','pptx','pdf'].includes(extOf(f.name)))files.push(f);else log('不支援的格式（舊版 .doc .xls .ppt 請先另存成新格式）：'+f.name,'warn')}renderFiles()}
+function renderFiles(){$('#files').innerHTML='';files.forEach((f,i)=>{const li=document.createElement('li');li.innerHTML='<span></span><span></span>';li.firstChild.textContent=f.name;li.lastChild.textContent=(f.size/1024).toFixed(0)+' KB ✕';li.lastChild.style.cursor='pointer';li.lastChild.onclick=()=>{files.splice(i,1);renderFiles()};$('#files').appendChild(li)});$('#go').disabled=!files.length}
+function log(t,c){const s=document.createElement('span');if(c)s.className=c;s.textContent=t+'\n';$('#log').appendChild(s);$('#log').scrollTop=1e9}
+function prog(p){$('#bar').style.width=Math.round(p*100)+'%'}
+const usedNames=new Set();
+function addOut(blob,name){if(usedNames.has(name)){const m=name.match(/^(.*?)(\.[^.]+)$/);let i=2;while(usedNames.has(m[1]+'('+i+')'+m[2]))i++;name=m[1]+'('+i+')'+m[2]}usedNames.add(name);const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.textContent='⬇ '+name;$('#out').appendChild(a);$('#outCard').classList.remove('hidden')}
+
+// ---------- 名詞對照表 ----------
+let GLOSS=null;
+async function loadGloss(){if(GLOSS)return GLOSS;GLOSS=[];try{const t=await (await fetch('../glossary.txt',{cache:'no-cache'})).text();
+  for(const ln of t.split(/\r?\n/)){if(!ln.trim()||ln.startsWith('#')||!ln.includes('='))continue;const [l,r]=ln.split('=');const L=l.split('、').map(s=>s.trim()).filter(Boolean),R=r.split('、').map(s=>s.trim()).filter(Boolean);if(L.length&&R.length)GLOSS.push([L,R])}}catch(e){}
+  return GLOSS}
+function glossFor(text){return GLOSS.filter(([L,R])=>L.concat(R).some(w=>w.length>1?text.includes(w):false)).map(([L,R])=>L.join('/')+' = '+R.join('/'))}
+
+// ---------- 翻譯 ----------
+function needs(s,tgt){s=s.trim();if(!s)return false;
+  if(!CJK.test(s)&&!KANA.test(s)&&!/[a-z]{3,}/i.test(s.replace(/\b[A-Z0-9]+[-_/.]?[A-Z0-9]*\b/g,'')))return false; // 數字、型號
+  if(tgt==='ja')return !KANA.test(s)&&(CJK.test(s)||/[a-z]{3,}/i.test(s));
+  if(tgt==='zh')return KANA.test(s)||(!CJK.test(s)&&/[a-z]{3,}/i.test(s));
+  if(tgt==='en')return CJK.test(s)||KANA.test(s);return false}
+function guessTgt(texts){let k=0,c=0;for(const t of texts){if(KANA.test(t))k++;else if(CJK.test(t))c++}return k>c*0.3&&k>0?'zh':'ja'}
+async function post(op,body,model,ms=90000){const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),ms);
+  try{const r=await fetch(PROXY,{method:'POST',signal:ac.signal,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({c:CODE,op,model,body})});const o=await r.json();return {st:+o.status||500,d:o.data||{}}}
+  finally{clearTimeout(tm)}}
+let MODELS=['gemini-3.8-flash','gemini-flash-latest','gemini-3.8-flash-lite','gemini-flash-lite-latest'],listed=false,think=true;const dead=new Set();
+async function discover(){if(listed)return;listed=true;try{const r=await post('models',null,null,20000);if(r.st!==200)return;
+  const ok=(r.d.models||[]).filter(x=>(x.supportedGenerationMethods||[]).includes('generateContent')).map(x=>String(x.name).replace(/^models\//,'')).filter(n=>/^gemini-[\d.]+-flash(-lite)?$/.test(n));
+  const v=n=>parseFloat(n.split('-')[1])||0;ok.sort((a,b)=>(/lite/.test(a)-/lite/.test(b))||(v(b)-v(a)));if(ok.length)MODELS=[...new Set([...ok.slice(0,4),...MODELS])]}catch(e){}}
+async function gemini(prompt){await discover();let last='';
+  for(const md of MODELS){if(dead.has(md))continue;let r;
+    const cfg={responseMimeType:'application/json',responseSchema:{type:'ARRAY',items:{type:'STRING'}},temperature:0.1};if(think)cfg.thinkingConfig={thinkingLevel:'minimal'};
+    try{r=await post('gen',{contents:[{parts:[{text:prompt}]}],generationConfig:cfg},md)}catch(e){last='沒有回應';continue}
+    if(r.st===400&&think&&/think/i.test(JSON.stringify(r.d))){think=false;return gemini(prompt)}
+    if(r.st===404){dead.add(md);continue}
+    if([429,500,503].includes(r.st)){last=r.st+' '+((r.d.error&&r.d.error.message)||'');continue}
+    if(r.st!==200)throw new Error((r.d.error&&r.d.error.message)||('HTTP '+r.st));
+    const u=r.d.usageMetadata||{};usage.inp+=u.promptTokenCount||0;usage.out+=(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0);
+    return ((r.d.candidates||[])[0]?.content?.parts||[]).map(p=>p.text||'').join('')}
+  throw new Error('Gemini 無法使用：'+last)}
+const usage={inp:0,out:0};
+function chunk(arr,maxN,maxC){const out=[];let cur=[],n=0;for(const s of arr){if(cur.length&&(cur.length>=maxN||n+s.length>maxC)){out.push(cur);cur=[];n=0}cur.push(s);n+=s.length}if(cur.length)out.push(cur);return out}
+async function gemBatch(items,tgt){
+  const g=glossFor(items.join('\n'));
+  const prompt='你是台灣半導體設備公司日本分公司的專業翻譯。把 JSON 陣列裡每一項翻成'+LANG[tgt].name+'。\n'+
+   '規則：1) 輸出同樣長度的 JSON 字串陣列，順序一一對應，不要合併或拆開項目。2) 數字、單位、型號、代碼、人名、公司名保持原樣。3) 文件語氣：正式、通順、正確，日文用商務文書體。4) 項目是同一份文件的連續內容，可參考前後文。5) 已經是目標語言的項目原樣回傳。'+
+   (g.length?'\n名詞對照表（優先使用）：\n'+g.join('\n'):'')+'\n\n'+JSON.stringify(items);
+  const t=await gemini(prompt);let a;try{a=JSON.parse(t)}catch(e){a=null}
+  if(!Array.isArray(a)||a.length!==items.length){if(items.length===1)throw new Error('格式錯誤');const h=items.length>>1;return [...await gemBatch(items.slice(0,h),tgt),...await gemBatch(items.slice(h),tgt)]}
+  return a.map((x,i)=>String(x==null?items[i]:x))}
+async function gtBatch(items,tgt){const r=await post('gt',{q:items,tl:LANG[tgt].gt},null,60000);if(r.st!==200||!Array.isArray(r.d.t))throw new Error((r.d.error&&r.d.error.message)||'Google 翻譯無法使用（中繼可能還沒更新）');return r.d.t.map((x,i)=>x==null?items[i]:String(x))}
+// texts → Map(text → {t, via:'gem'|'gt'|'none'})
+async function translateAll(texts,tgt,onp){await loadGloss();const res=new Map();const todo=[];
+  for(const s of new Set(texts)){if(!needs(s,tgt)){res.set(s,{t:s,via:'skip'});continue}
+    let c=null;try{c=LS&&LS.getItem('dt:'+tgt+':'+s)}catch(e){}if(c!=null){res.set(s,{t:c,via:'gem'});continue}todo.push(s)}
+  if(!todo.length)return res;
+  const batches=chunk(todo,60,3500);let done=0,gemFail=0;
+  for(const b of batches){let out=null,via='gem';
+    if(gemFail<2){try{out=await gemBatch(b,tgt);gemFail=0}catch(e){gemFail++;log('Gemini：'+e.message+' → 改用 Google 翻譯','warn')}}
+    if(!out){via='gt';out=[];try{for(const bb of chunk(b,40,1500))out.push(...await gtBatch(bb,tgt))}catch(e){log(e.message+'，這部分保留原文','err');out=b.slice();via='none'}}
+    b.forEach((s,i)=>{res.set(s,{t:out[i],via});if(via==='gem')try{LS&&LS.setItem('dt:'+tgt+':'+s,out[i])}catch(e){}});
+    done+=b.length;onp&&onp(done/todo.length)}
+  return res}
+
+// ---------- Office（Word / Excel / PPT）原地替換，排版不變 ----------
+const NS={w:'http://schemas.openxmlformats.org/wordprocessingml/2006/main',a:'http://schemas.openxmlformats.org/drawingml/2006/main',s:'http://schemas.openxmlformats.org/spreadsheetml/2006/main'};
+const PARTS={docx:[/^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$/,/^word\/(charts\/chart|diagrams\/data)\d*\.xml$/],
+  pptx:[/^ppt\/slides\/slide\d+\.xml$/,/^ppt\/notesSlides\/notesSlide\d+\.xml$/,/^ppt\/(charts\/chart|diagrams\/data|diagrams\/drawing)\d*\.xml$/],
+  xlsx:[/^xl\/sharedStrings\.xml$/,/^xl\/worksheets\/sheet\d+\.xml$/,/^xl\/(drawings\/drawing|charts\/chart)\d+\.xml$/]};
+const MIME={docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};
+const natural=(a,b)=>a.localeCompare(b,undefined,{numeric:true});
+function labelOf(path,kind){let m;if((m=path.match(/slide(\d+)\.xml$/)))return '投影片 '+m[1];if((m=path.match(/notesSlide(\d+)/)))return '備忘稿 '+m[1];if(/header|footer/.test(path))return '頁首／頁尾';if(/sharedStrings/.test(path))return '儲存格';if((m=path.match(/sheet(\d+)\.xml$/)))return '工作表 '+m[1];if(/chart/.test(path))return '圖表';if(/diagram|drawing/.test(path))return '圖形';return '本文'}
+async function officeOpen(file,kind){const zip=await JSZip.loadAsync(file);const paths=Object.keys(zip.files).filter(p=>PARTS[kind].some(r=>r.test(p))).sort(natural);
+  const docs=[],units=[];
+  for(const p of paths){const xml=await zip.file(p).async('string');const doc=new DOMParser().parseFromString(xml,'application/xml');if(doc.getElementsByTagName('parsererror').length)continue;docs.push({p,doc});
+    const lab=labelOf(p,kind);
+    const groups=[[NS.w,'p','t'],[NS.a,'p','t'],[NS.s,'si','t'],[NS.s,'is','t']];
+    for(const [ns,pt,tt] of groups){for(const P of Array.from(doc.getElementsByTagNameNS(ns,pt))){
+      const ts=Array.from(P.getElementsByTagNameNS(ns,tt)).filter(t=>{for(let n=t.parentNode;n;n=n.parentNode){if(n.namespaceURI===ns&&n.localName==='rPh')return false;if(n.namespaceURI===ns&&n.localName===pt)return n===P}return false});
+      const text=ts.map(t=>t.textContent).join('');if(text.trim())units.push({ts,src:text,label:lab})}}}
+  return {zip,docs,units}}
+async function officeBuild(o,kind,tr,font){
+  for(const u of o.units){const r=tr.get(u.src);if(!r||r.t===u.src)continue;u.ts[0].textContent=r.t;u.ts[0].setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');for(let i=1;i<u.ts.length;i++)u.ts[i].textContent=''}
+  const ser=new XMLSerializer();for(const {p,doc} of o.docs){let x=ser.serializeToString(doc);if(!x.startsWith('<?xml'))x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'+x;o.zip.file(p,x)}
+  return o.zip.generateAsync({type:'blob',mimeType:MIME[kind],compression:'DEFLATE'})}
+
+// ---------- PDF 解析 ----------
+if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS+'build/pdf.worker.min.js';
+const joinCJK=(a,b)=>(!a?b:!b?a:(CJK.test(a.slice(-1))||KANA.test(a.slice(-1))||CJK.test(b[0])||KANA.test(b[0])||/[-‐]$/.test(a))?a+b:a+' '+b);
+async function pdfOpen(file){const data=new Uint8Array(await file.arrayBuffer());
+  const pdf=await pdfjsLib.getDocument({data,cMapUrl:PDFJS+'cmaps/',cMapPacked:true,standardFontDataUrl:PDFJS+'standard_fonts/'}).promise;
+  let info={};try{info=(await pdf.getMetadata()).info||{}}catch(e){}return {pdf,info}}
+const tidy=s=>s.replace(/\s+/g,' ').replace(/([\u3000-\u30ff\u3400-\u9fff\uff00-\uffef])\s+(?=[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef])/g,'$1').trim();
+const isNum=s=>/^[\s\d.,%¥$￥+\-()]+$/.test(s)&&/\d/.test(s);
+function chunks(L,k){const ch=[];for(const it of L.items){const c=ch[ch.length-1];const gap=c?it.x-c.x2:0;
+    const cut=k<1&&c&&it.s.trim()&&gap>it.fs*0.1&&isNum(c.s)!==isNum(it.s);
+    if(c&&!cut&&gap<Math.max(k*it.fs,k*5)){c.s=gap>it.fs*0.2?joinCJK(c.s,it.s):c.s+it.s;c.x2=Math.max(c.x2,it.x+it.w);c.fs=Math.max(c.fs,it.fs)}else ch.push({x:it.x,x2:it.x+it.w,y:L.y,fs:it.fs,s:it.s})}
+  return ch.map(c=>(c.s=tidy(c.s),c)).filter(c=>c.s)}
+async function pdfPage(pdf,n){const page=await pdf.getPage(n);const vp=page.getViewport({scale:1});const W=vp.width,H=vp.height;
+  const tc=await page.getTextContent();const U=pdfjsLib.Util;
+  const items=[];for(const it of tc.items){if(!it.str||!it.str.trim())continue;const t=U.transform(vp.transform,it.transform);const fs=Math.hypot(t[2],t[3])||it.height||10;
+    if(Math.abs(t[1])>Math.abs(t[0])*0.3)continue; // 直書き・回転は省略
+    items.push({x:t[4],y:t[5],w:it.width||fs*it.str.length*0.6,fs,s:it.str})}
+  // 行
+  items.sort((a,b)=>a.y-b.y||a.x-b.x);const lines=[];
+  for(const it of items){const L=lines.find(l=>Math.abs(l.y-it.y)<Math.min(l.fs,it.fs)*0.45);if(L){L.items.push(it);L.fs=Math.max(L.fs,it.fs)}else lines.push({y:it.y,fs:it.fs,items:[it]})}
+  lines.sort((a,b)=>a.y-b.y);
+  for(const L of lines){L.items.sort((a,b)=>a.x-b.x);L.ch=chunks(L,1.2)}
+  const ls=lines.filter(l=>l.ch.length);
+  // 段落
+  const blocks=[];
+  for(const L of ls){const prev=blocks[blocks.length-1];
+    if(L.ch.length>1){blocks.push({type:'row',y:L.y,fs:L.fs,ch:L.ch});continue}
+    const c=L.ch[0];
+    if(prev&&prev.type==='p'){const last=prev.lines[prev.lines.length-1];const gap=L.y-last.y;
+      const same=Math.abs(c.fs-prev.fs)<prev.fs*0.15&&gap>0&&gap<prev.fs*1.8&&Math.abs(c.x-prev.x)<prev.fs*2.5;
+      const ended=last.x2<prev.x2-prev.fs*3||/[。．.!?！？:：]$/.test(last.s)&&last.x2<prev.x2-prev.fs;
+      const bullet=/^([•・●■□◆◇○\-－*※]|\(?\d+[.)、．]|[①-⑳]|[一二三四五六七八九十]+[、．])/.test(c.s);
+      if(same&&!(prev.lines.length>1&&ended)&&!(prev.lines.length===1&&ended&&/[。．.!?！？]$/.test(last.s))&&!bullet){prev.lines.push(c);prev.x2=Math.max(prev.x2,c.x2);prev.s=joinCJK(prev.s,c.s);continue}}
+    blocks.push({type:'p',x:c.x,x2:c.x2,y:L.y,fs:c.fs,lines:[c],s:c.s})}
+  // 画像の位置(オペレーターリストから)
+  const imgs=[];let vec=0;
+  try{const ol=await page.getOperatorList();const O=pdfjsLib.OPS;let ctm=[1,0,0,1,0,0];const st=[];
+    for(let i=0;i<ol.fnArray.length;i++){const f=ol.fnArray[i],a=ol.argsArray[i];
+      if(f===O.save)st.push(ctm.slice());else if(f===O.restore)ctm=st.pop()||ctm;else if(f===O.transform)ctm=U.transform(ctm,a);
+      else if(f===O.paintFormXObjectBegin){st.push(ctm.slice());if(a&&a[0])ctm=U.transform(ctm,a[0])}else if(f===O.paintFormXObjectEnd)ctm=st.pop()||ctm;
+      else if(f===O.constructPath)vec++;
+      else if(f===O.paintImageXObject||f===O.paintInlineImageXObject||f===O.paintImageMaskXObject||f===O.paintImageXObjectRepeat||f===O.paintJpegXObject){
+        const m=U.transform(vp.transform,ctm);const P=[[0,0],[1,0],[0,1],[1,1]].map(p=>U.applyTransform(p,m));
+        const x=Math.max(0,Math.min(...P.map(p=>p[0]))),y=Math.max(0,Math.min(...P.map(p=>p[1]))),x2=Math.min(W,Math.max(...P.map(p=>p[0]))),y2=Math.min(H,Math.max(...P.map(p=>p[1])));
+        if(x2-x>12&&y2-y>12)imgs.push({x,y,w:x2-x,h:y2-y})}}}catch(e){}
+  return {page,W,H,blocks,lines:ls,imgs,vec,nText:items.length}}
+// 文字を消した画面(画像・線・背景だけ)と、元の画面を描く
+async function pdfRender(pg,scale,noText){const vp=pg.page.getViewport({scale});const cv=document.createElement('canvas');cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+  const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);if(noText){ctx.fillText=()=>{};ctx.strokeText=()=>{}}
+  await pg.page.render({canvasContext:ctx,viewport:vp}).promise;return cv}
+function crop(cv,scale,r){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(r.w*scale));c.height=Math.max(1,Math.round(r.h*scale));c.getContext('2d').drawImage(cv,r.x*scale,r.y*scale,r.w*scale,r.h*scale,0,0,c.width,c.height);return c}
+const toBuf=c=>new Promise(res=>c.toBlob(b=>b.arrayBuffer().then(res),'image/png'));
+// 文字の色:元の画面と文字なし画面の差がある画素の平均色
+function colorOf(full,bare,scale,x,y,w,h){try{const X=Math.max(0,Math.floor(x*scale)),Y=Math.max(0,Math.floor(y*scale)),Wd=Math.max(1,Math.min(full.width-X,Math.ceil(w*scale))),Hd=Math.max(1,Math.min(full.height-Y,Math.ceil(h*scale)));
+  const a=full.getContext('2d').getImageData(X,Y,Wd,Hd).data,b=bare.getContext('2d').getImageData(X,Y,Wd,Hd).data;let r=0,g=0,bl=0,n=0;
+  for(let i=0;i<a.length;i+=4){if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>200){r+=a[i];g+=a[i+1];bl+=a[i+2];n++}}
+  if(n<4)return '000000';const hx=v=>Math.round(v/n).toString(16).padStart(2,'0');return hx(r)+hx(g)+hx(bl)}catch(e){return '000000'}}
+const nearBlack=c=>[0,2,4].every(i=>parseInt(c.substr(i,2),16)<0x50);
+function guessFmt(info,pages){const s=((info.Creator||'')+' '+(info.Producer||'')).toLowerCase();
+  if(/powerpoint|impress|keynote/.test(s))return ['pptx','檔案紀錄：'+(info.Creator||info.Producer)];
+  if(/excel|calc|spreadsheet/.test(s))return ['xlsx','檔案紀錄：'+(info.Creator||info.Producer)];
+  if(/word|writer/.test(s))return ['docx','檔案紀錄：'+(info.Creator||info.Producer)];
+  const land=pages.filter(p=>p.W>p.H).length>pages.length/2;const rows=pages.reduce((a,p)=>a+p.blocks.filter(b=>b.type==='row').length,0),all=pages.reduce((a,p)=>a+p.blocks.length,0)||1;
+  if(/autocad|cad|draw/.test(s)||land&&pages.every(p=>p.vec>150||p.imgs.length))return ['pptx','橫式、圖多'];
+  if(rows/all>0.5)return ['xlsx','表格多'];return ['docx','一般文件']}
+
+// ---------- PDF → Word ----------
+async function buildDocx(pages,get,font){const D=docx;const sections=[];
+  for(const pg of pages){const ml=Math.min(90,Math.max(28,Math.min(...pg.blocks.map(b=>b.type==='p'?b.x:b.ch[0].x),pg.W)-2)),tw=v=>Math.round(v*20);
+    const items=[];
+    const run=(t,fs,color)=>new D.TextRun({text:t,size:Math.round(fs*2),color:color||undefined,font:{ascii:font,eastAsia:font,hAnsi:font}});
+    const BB={style:D.BorderStyle.SINGLE,size:4,color:'999999'},bord={top:BB,bottom:BB,left:BB,right:BB};
+    const bl=pg.blocks;
+    for(let i=0;i<bl.length;i++){const b=bl[i];const fs=Math.max(6,Math.min(48,b.fs));const top=b.y-b.fs;
+      if(b.type==='p'){items.push({y:top,p:new D.Paragraph({indent:{left:tw(Math.max(0,b.x-ml))},spacing:{after:Math.round(fs*6)},children:[run(get(b.s),fs,b.color)]})});continue}
+      // 連続した「複数欄の行」→ Word の表にする
+      let j=i;while(j+1<bl.length&&bl[j+1].type==='row'&&bl[j+1].y-bl[j].y<bl[j].fs*3)j++;
+      const grp=bl.slice(i,j+1);i=j;
+      const xs=[];for(const r of grp)for(const c of r.ch)xs.push(c.x);xs.sort((a,b)=>a-b);const cols=[];for(const x of xs)if(!cols.length||x-cols[cols.length-1]>10)cols.push(x);
+      const right=Math.min(pg.W-ml,Math.max(...grp.map(r=>r.ch[r.ch.length-1].x2))+6),left=Math.max(ml,cols[0]-4);
+      const cw=cols.map((x,q)=>Math.max(20,((q+1<cols.length?cols[q+1]:right)-(q?x:left))));
+      if(cw.length>1){const L=cw.length-1,avg=cw.slice(0,L).reduce((a,b)=>a+b,0)/L;cw[L]=Math.max(cw[L],Math.min(avg,pg.W-ml-(cols[L]||left)))}
+      const rows=grp.map(r=>{const cell=cols.map(()=>[]);for(const c of r.ch){let q=0;for(let k=0;k<cols.length;k++)if(cols[k]<=c.x+4)q=k;cell[q].push(get(c.s))}
+        return new D.TableRow({children:cell.map((t,q)=>new D.TableCell({borders:bord,width:{size:tw(cw[q]),type:D.WidthType.DXA},children:[new D.Paragraph({children:[run(t.join(' '),Math.max(6,Math.min(48,r.fs)),r.color)]})]}))})});
+      items.push({y:top,p:new D.Table({rows,columnWidths:cw.map(tw),width:{size:tw(cw.reduce((a,b)=>a+b,0)),type:D.WidthType.DXA},indent:{size:tw(Math.max(0,left-ml)),type:D.WidthType.DXA}})});
+      items.push({y:top+0.01,p:new D.Paragraph({spacing:{after:0},children:[]})})}
+    for(const im of pg.imgData||[]){const maxW=pg.W-ml*2;const k=Math.min(1,maxW/im.w);items.push({y:im.y,p:new D.Paragraph({indent:{left:tw(Math.max(0,Math.min(im.x-ml,maxW-im.w*k)))},children:[new D.ImageRun({data:im.buf,transformation:{width:Math.round(im.w*k*96/72),height:Math.round(im.h*k*96/72)}})]})})}
+    items.sort((a,b)=>a.y-b.y);
+    sections.push({properties:{page:{size:{width:tw(pg.W),height:tw(pg.H),orientation:pg.W>pg.H?D.PageOrientation.LANDSCAPE:D.PageOrientation.PORTRAIT},margin:{top:tw(Math.min(100,Math.max(20,Math.min(pg.H,...pg.blocks.map(b=>b.y-b.fs*1.3),...(pg.imgData||[]).map(m=>m.y))-4))),bottom:tw(36),left:tw(ml),right:tw(ml)}}},children:items.length?items.map(i=>i.p):[new D.Paragraph('')]})}
+  return D.Packer.toBlob(new D.Document({sections}))}
+// ---------- PDF → PowerPoint ----------
+async function buildPptx(pages,get,font){const pres=new PptxGenJS();const W=pages[0].W/72,H=pages[0].H/72;pres.defineLayout({name:'PDF',width:W,height:H});pres.layout='PDF';
+  for(const pg of pages){const s=pres.addSlide();const sx=W/(pg.W/72),sy=H/(pg.H/72);const k=(v,f)=>v/72*f;
+    if(pg.bg)s.addImage({data:pg.bg,x:0,y:0,w:W,h:H});
+    for(const b of pg.blocks){const parts=b.type==='p'?[{x:b.x,x2:b.x2,s:b.s,n:b.lines.length}]:b.ch.map(c=>({x:c.x,x2:c.x2,s:c.s,n:1}));
+      for(const c of parts){const t=get(c.s);const wpt=Math.max(c.x2-c.x,b.fs*2)*1.08+4;
+        s.addText(t,{x:k(c.x,sx),y:k(b.y-b.fs*1.05,sy),w:Math.min(k(wpt,sx),W-k(c.x,sx)),h:k(b.fs*1.3*c.n+2,sy),fontSize:Math.max(6,Math.round(b.fs*10)/10),fontFace:font,color:b.color||'000000',margin:0,valign:'top',fit:'shrink',wrap:true})}}}
+  return pres.write({outputType:'blob'})}
+// ---------- PDF → Excel ----------
+function xlsxLines(pg){return pg.lines.map(L=>({y:L.y,ch:chunks(L,0.3)})).filter(L=>L.ch.length)}
+function buildXlsx(pages,get){const wb=XLSX.utils.book_new();
+  pages.forEach((pg,i)=>{const XL=xlsxLines(pg);const xs=[];for(const L of XL)for(const c of L.ch)if(!isNum(c.s))xs.push(c.x);if(!xs.length)xs.push(0);xs.sort((a,b)=>a-b);const cols=[];for(const x of xs){if(!cols.length||x-cols[cols.length-1]>8)cols.push(x)}
+    const aoa=XL.map(L=>{const r=[];for(const c of L.ch){let j=0;const ax=isNum(c.s)?c.x2-1:c.x+4;for(let q=0;q<cols.length;q++)if(cols[q]<=ax)j=q;while(r[j]!=null&&j<cols.length)j++;const v=get(c.s);r[j]=/^-?\d{1,15}(\.\d+)?$/.test(v)?Number(v):v}for(let q=0;q<r.length;q++)if(r[q]==null)r[q]='';return r});
+    const ws=XLSX.utils.aoa_to_sheet(aoa.length?aoa:[['']]);ws['!cols']=cols.map((x,q)=>({wch:Math.max(6,Math.min(60,Math.round(((cols[q+1]||pg.W-20)-x)/6)))}));
+    XLSX.utils.book_append_sheet(wb,ws,'P'+(i+1))});
+  const out=XLSX.write(wb,{bookType:'xlsx',type:'array'});return new Blob([out],{type:MIME.xlsx})}
+// ---------- 對照檔 ----------
+async function buildBilingual(units,tr,title,font){const D=docx;const rows=[];let lab=null;const B={style:D.BorderStyle.SINGLE,size:4,color:'BBBBBB'};const borders={top:B,bottom:B,left:B,right:B};
+  const cell=(t,o={})=>new D.TableCell({borders,width:{size:50,type:D.WidthType.PERCENTAGE},shading:o.fill?{type:D.ShadingType.CLEAR,fill:o.fill,color:'auto'}:undefined,columnSpan:o.span,children:[new D.Paragraph({children:[new D.TextRun({text:t,bold:!!o.bold,size:20,font:{ascii:font,eastAsia:font,hAnsi:font}})]})]});
+  rows.push(new D.TableRow({tableHeader:true,children:[cell('原文',{bold:true,fill:'DDE6F5'}),cell('譯文',{bold:true,fill:'DDE6F5'})]}));
+  const seen=new Set();let gt=0;
+  for(const u of units){if(u.label!==lab){lab=u.label;rows.push(new D.TableRow({children:[cell(lab,{bold:true,span:2,fill:'F2F2F2'})]}))}
+    const r=tr.get(u.src)||{t:u.src,via:'skip'};if(r.via==='skip')continue;const key=lab+'\u0000'+u.src;if(seen.has(key))continue;seen.add(key);
+    const fill=r.via==='gt'?'FFF3B0':r.via==='none'?'FFD6D6':undefined;if(r.via!=='gem')gt++;
+    rows.push(new D.TableRow({children:[cell(u.src),cell(r.t,{fill})]}))}
+  const head=[new D.Paragraph({children:[new D.TextRun({text:title+'　原文對照',bold:true,size:28,font:{ascii:font,eastAsia:font,hAnsi:font}})]}),
+    new D.Paragraph({children:[new D.TextRun({text:gt?'黃色＝Gemini 無法使用時改用 Google 翻譯，請特別檢查。紅色＝沒有翻到，保留原文。':'全部由 Gemini 翻譯（已套用名詞對照表）。',size:18,color:'666666'})]})];
+  return D.Packer.toBlob(new D.Document({sections:[{properties:{page:{margin:{top:720,bottom:720,left:720,right:720}}},children:[...head,new D.Table({width:{size:100,type:D.WidthType.PERCENTAGE},rows})]}]}))}
+
+// ---------- 全体の流れ ----------
+async function processFile(f,opt){const kind=extOf(f.name),base=f.name.replace(/\.[^.]+$/,'');let tgt=opt.tgt;
+  if(kind!=='pdf'){log('讀取 '+f.name+' …');const o=await officeOpen(f,kind);log('　找到 '+o.units.length+' 段文字');
+    if(tgt==='none')return log('　Word/Excel/PPT 不需要轉檔，略過','warn');
+    if(tgt==='auto')tgt=guessTgt(o.units.map(u=>u.src));log('　翻成 '+LANG[tgt].name+' …');
+    const tr=await translateAll(o.units.map(u=>u.src),tgt,p=>prog(opt.p0+opt.ps*(0.1+0.8*p)));
+    const units=o.units.map(u=>({src:u.src,label:u.label}));
+    addOut(await officeBuild(o,kind,tr,LANG[tgt].font),base+'_'+tgt+'.'+kind);
+    if(opt.bi)addOut(await buildBilingual(units,tr,f.name,LANG[tgt].font),base+'_對照.docx');return}
+  log('讀取 '+f.name+' …');const {pdf,info}=await pdfOpen(f);const N=pdf.numPages;if(N>150)throw new Error('頁數太多（'+N+' 頁），請先拆成 150 頁以下');
+  const pages=[];for(let i=1;i<=N;i++){pages.push(await pdfPage(pdf,i));prog(opt.p0+opt.ps*0.1*i/N)}
+  const totalText=pages.reduce((a,p)=>a+p.nText,0);
+  let [fmt,why]=opt.pdfFmt==='auto'?guessFmt(info,pages):[opt.pdfFmt,'手動選擇'];
+  log('　'+N+' 頁，轉成 '+{docx:'Word',pptx:'PowerPoint',xlsx:'Excel'}[fmt]+'（'+why+'）');
+  if(!totalText)log('　這份 PDF 沒有文字資料（可能是掃描檔），只能保留圖片，無法翻譯','warn');
+  // 画像・色
+  const SC=2;
+  for(const pg of pages){if(fmt==='xlsx')break;const bare=await pdfRender(pg,SC,true);let full=null;if(pg.nText)full=await pdfRender(pg,SC,false);
+    for(const b of pg.blocks){if(!full)break;const x=b.type==='p'?b.x:b.ch[0].x,x2=b.type==='p'?b.x2:b.ch[b.ch.length-1].x2,top=b.y-b.fs,h=b.type==='p'?(b.lines[b.lines.length-1].y-b.y+b.fs*1.2):b.fs*1.2;const c=colorOf(full,bare,SC,x,top,x2-x,h);b.color=nearBlack(c)?'000000':c}
+    if(fmt==='pptx'){pg.bg='data:image/png;base64,'+bare.toDataURL('image/png').split(',')[1]}
+    else{const big=pg.imgs.filter(r=>r.w*r.h>pg.W*pg.H*0.85);const list=!pg.nText?[{x:0,y:0,w:pg.W,h:pg.H}]:big.length?[]:pg.imgs;
+      pg.imgData=[];for(const r of list.slice(0,30))pg.imgData.push({...r,buf:await toBuf(crop(bare,SC,r))});
+      if(big.length&&pg.nText)log('　第 '+(pages.indexOf(pg)+1)+' 頁有整頁背景圖，Word 版不放背景（要保留請選 PowerPoint）','warn')}
+    bare.width=bare.height=0;if(full)full.width=full.height=0;
+    prog(opt.p0+opt.ps*(0.1+0.15*(pages.indexOf(pg)+1)/N))}
+  // 翻訳する単位
+  const units=[];pages.forEach((pg,i)=>{const lab='第 '+(i+1)+' 頁';if(fmt==='xlsx'){for(const L of xlsxLines(pg))for(const c of L.ch)units.push({src:c.s,label:lab})}else for(const b of pg.blocks){if(b.type==='p')units.push({src:b.s,label:lab});else for(const c of b.ch)units.push({src:c.s,label:lab})}});
+  let tr=new Map(),font=LANG.ja.font,suffix='';
+  if(tgt!=='none'&&units.length){if(tgt==='auto')tgt=guessTgt(units.map(u=>u.src));font=LANG[tgt].font;suffix='_'+tgt;log('　翻成 '+LANG[tgt].name+' …');tr=await translateAll(units.map(u=>u.src),tgt,p=>prog(opt.p0+opt.ps*(0.25+0.65*p)))}
+  else{const s=units.map(u=>u.src).join('');font=KANA.test(s)?LANG.ja.font:CJK.test(s)?LANG.zh.font:LANG.en.font}
+  const get=s=>{const r=tr.get(s);return r?r.t:s};
+  const blob=fmt==='docx'?await buildDocx(pages,get,font):fmt==='pptx'?await buildPptx(pages,get,font):buildXlsx(pages,get);
+  addOut(blob,base+suffix+'.'+fmt);
+  if(opt.bi&&tgt!=='none'&&units.length)addOut(await buildBilingual(units,tr,f.name,font),base+'_對照.docx')}
+
+$('#go').onclick=async()=>{const opt={tgt:$('#tgt').value,pdfFmt:$('#pdfFmt').value,bi:$('#bi').checked};$('#go').disabled=true;$('#log').innerHTML='';prog(0);usage.inp=usage.out=0;
+  const list=files.slice();for(let i=0;i<list.length;i++){opt.p0=i/list.length;opt.ps=1/list.length;
+    try{await processFile(list[i],opt);log('✓ '+list[i].name,'ok')}catch(e){console.error(e);log('✕ '+list[i].name+'：'+(e.message||e),'err')}}
+  prog(1);if(usage.inp)log('Gemini 用量：輸入 '+usage.inp.toLocaleString()+' / 輸出 '+usage.out.toLocaleString()+' tokens');$('#go').disabled=false};
+log('版本 '+VERSION);
+</script>
+</body>
+</html>
