@@ -8,9 +8,6 @@
  *                 1 本が上限(429)や混雑(503)のときは自動で次のキーを使う
  *   CODES       … アクセスコード=1日の上限回数 をカンマ区切り。0 は無制限
  *                 例) TK2026=900,JOSH=0   (900 回 ≒ 1 時間)
- *
- * op:'gt' … Google 翻訳(LanguageApp、キー不要・無料、1 日の回数上限あり)。文件翻訳ツールの予備用
- *   body: { q: [文字列…], tl: 'ja' | 'zh-TW' | 'en' }  → data: { t: [訳文…] }
  */
 function doGet() { return out_({ status: 200, data: { ok: true } }); }
 
@@ -31,7 +28,6 @@ function doPost(e) {
       var models = (j.models || []).map(function (m) { return { name: m.name, supportedGenerationMethods: m.supportedGenerationMethods }; });
       return out_({ status: r.getResponseCode(), data: { models: models } });
     }
-    if (req.op === 'gt') return gtranslate_(props, String(req.c).trim(), limit, req.body || {});
     if (req.op !== 'gen') return err_(400, 'bad op');
     var model = String(req.model || '');
     if (!/^gemini-[\w.\-]+$/.test(model)) return err_(400, 'bad model');
@@ -51,22 +47,6 @@ function doPost(e) {
   } catch (x) {
     return err_(500, 'サーバーエラー: ' + x.message);
   }
-}
-
-function gtranslate_(props, c, limit, b) {
-  var q = (b.q || []).map(String), tl = String(b.tl || 'ja');
-  if (!/^[a-zA-Z]{2}(-[a-zA-Z]{2})?$/.test(tl)) return err_(400, 'bad lang');
-  if (!q.length || q.join('').length > 5000) return err_(400, 'bad q');
-  if (!count_(props, c, limit)) return err_(403, '今日の利用上限に達しました');
-  var t;
-  try {
-    // まとめて 1 回で訳す(改行で区切る)。行数がずれたら 1 件ずつ
-    t = LanguageApp.translate(q.join('\n'), '', tl).split('\n');
-    if (t.length !== q.length) t = q.map(function (s) { try { return LanguageApp.translate(s, '', tl); } catch (x) { return null; } });
-  } catch (x) {
-    return err_(503, 'Google 翻訳エラー: ' + x.message);
-  }
-  return out_({ status: 200, data: { t: t } });
 }
 
 function codeLimit_(codes, c) {
