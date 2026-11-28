@@ -51,7 +51,7 @@ import numpy as np
 BASE = Path(__file__).resolve().parent
 MODEL_DIR = BASE / "models"
 REC_DIR = BASE / "recordings"
-BUILD = "2026-11-26e"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
+BUILD = "2026-11-28a"  # 用來確認電腦上跑的是哪一版(一鍵更新也用這個比對)
 # 一鍵更新:新版放在這裡(Josh 合併 PR 才會發布)
 UPDATE_BASE = "https://raw.githubusercontent.com/lee09930239-dotcom/kaigi-mobile/main/pc/"
 WRITE_LOG = BASE / "meta_writes.log"
@@ -1793,6 +1793,58 @@ def save_config(cfg):
     CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+# ===== 使用統計(2026-11-28):只送「機能名・回数・匿名ID」。会議の内容・文字・音声は送らない =====
+STATS_URL = "https://script.google.com/macros/s/AKfycbzKk8YCyvvTMJu0lCRPtWY7fDAL96fP2xO8o27F_55DKs1xdhbU9jeqQEsOs-r2aEM/exec"  # 使用統計 GAS の /exec(空 = 送らない)
+STATS_PRODUCT = "meeting_customer"
+_stats_q = []
+_stats_last = {}
+_stats_lock = threading.Lock()
+
+
+def stats_uid():
+    cfg = load_config()
+    u = cfg.get("stats_uid")
+    if not u:
+        u = os.urandom(8).hex()
+        cfg["stats_uid"] = u
+        try:
+            save_config(cfg)
+        except OSError:
+            pass
+    return u
+
+
+def stats_add(name):
+    if not STATS_URL or load_config().get("stats_off"):
+        return
+    name = re.sub(r"\d{8}-\d{6}", "*", name)[:40]
+    now = time.time()
+    with _stats_lock:
+        if now - _stats_last.get(name, 0) < 30:  # 同じ機能の連打・ポーリングは 30 秒に 1 回だけ数える
+            return
+        _stats_last[name] = now
+        _stats_q.append(name)
+
+
+def _stats_loop():
+    while True:
+        time.sleep(60)
+        with _stats_lock:
+            items = list(_stats_q)
+            _stats_q.clear()
+        if not items or not STATS_URL:
+            continue
+        try:
+            u = stats_uid()
+            body = json.dumps({"items": [{"p": STATS_PRODUCT, "f": n, "u": u, "b": BUILD} for n in items]}).encode()
+            urllib.request.urlopen(urllib.request.Request(STATS_URL, data=body, headers={"Content-Type": "text/plain"}), timeout=15).read()
+        except Exception:
+            pass
+
+
+threading.Thread(target=_stats_loop, daemon=True).start()
+
+
 def gemini_configured():
     return bool(load_config().get("gemini_key"))
 
@@ -2237,7 +2289,11 @@ def make_handler(app):
 
         def do_GET(self):
             path = urllib.parse.urlparse(self.path).path
+            if path.startswith("/api/") and path not in ("/api/state", "/api/devices", "/api/meetings", "/api/version", "/api/gemini", "/api/stats"):
+                stats_add("GET " + path)
             try:
+                if path == "/api/stats":
+                    return self.send(200, {"on": not load_config().get("stats_off")})
                 if path == "/":
                     return self.send(200, PAGE, "text/html; charset=utf-8")
                 if path == "/api/state":
@@ -2302,7 +2358,14 @@ def make_handler(app):
 
         def do_POST(self):
             path = urllib.parse.urlparse(self.path).path
+            if path.startswith("/api/") and path != "/api/stats":
+                stats_add("POST " + path)
             try:
+                if path == "/api/stats":
+                    cfg = load_config()
+                    cfg["stats_off"] = not self.body().get("on", True)
+                    save_config(cfg)
+                    return self.send(200, {"on": not cfg["stats_off"]})
                 if path == "/api/start":
                     d = self.body()
                     people = d.get("people")
@@ -2576,6 +2639,7 @@ button.copied{background:#1e8e3e!important;color:#fff!important;border-color:#1e
   </div>
   <h2 style="display:flex;justify-content:space-between;align-items:baseline">過去の会議 </h2>
   <div class="card list" id="meetings"><div class="note">まだ記録がありません</div></div>
+  <p class="note" style="margin-top:14px"><label><input type="checkbox" id="statsOn" checked> 改善のため、使った機能の回数だけを開発者に送る(会議の内容・文字・音声は一切送りません)</label></p>
   <details class="card" id="gemBox" style="margin-top:18px">
     <summary style="cursor:pointer;font-weight:bold">☁ オプション:Gemini(Google の AI)で要点・議事録を自動作成 <span id="gemState" class="note" style="font-weight:normal"></span></summary>
     <div class="banner" style="margin:12px 0;background:#fff7ed;border-color:#fdba74">
@@ -3037,6 +3101,7 @@ $('#spkBtn').onclick=async()=>{if(!confirm('話者を分け直しますか?(字�
   catch(e){toast(e.message);$('#spkBtn').disabled=false}};
 // ---- 一鍵更新 ----
 const UPD={};
+api('/api/stats').then(g=>{$('#statsOn').checked=g.on}).catch(()=>{});$('#statsOn').onchange=e=>api('/api/stats',{on:e.target.checked}).catch(()=>{});
 async function checkUpdate(){try{const v=await api('/api/version');UPD.cur=v.build;UPD.url=v.url;$('#buildTag').textContent='ver '+v.build;
   const r=await fetch(v.url+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j.build&&j.build>v.build){UPD.want=j.build;$('#upNotes').textContent='(ver '+j.build+')'+(j.notes?' '+j.notes:'');$('#upBanner').classList.remove('hidden')}}catch(e){}}
